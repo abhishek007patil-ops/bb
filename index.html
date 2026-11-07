@@ -663,7 +663,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <div class="ctrl">
         <label>Playback</label>
         <div class="seg" id="sourceSeg" role="group" aria-label="Playback source">
-          <button data-src="app">Spotify app</button><button data-src="spotify">Web player</button><button data-src="preview">Clip</button>
+          <button data-src="app">Spotify app</button><button data-src="spotify">Web player</button><button data-src="preview">30s preview</button>
         </div>
       </div>
     </div>
@@ -746,7 +746,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
     <div class="field">
       <label>Default playback</label>
       <div class="seg" id="sourceSeg2" role="group" aria-label="Default playback source">
-        <button data-src="app">Spotify app</button><button data-src="spotify">Web player</button><button data-src="preview">Clip</button>
+        <button data-src="app">Spotify app</button><button data-src="spotify">Web player</button><button data-src="preview">30s preview</button>
       </div>
     </div>
     <div class="note">
@@ -990,7 +990,7 @@ function momentLabel(t){
 
 /* ---------- state ---------- */
 const state = {
-  pool:MOCK.slice(), live:false, mine:false, filter:'all', source:store.get('bb.src4', 'app'),
+  pool:MOCK.slice(), live:false, mine:false, filter:'all', source:store.get('bb.src5', 'preview'),
   spawnLevel:4, autopop:false, autoNext:0, autoTarget:null, floor:0, hintOut:false,
   history:store.get('bb.history', []), cursor:0, seekPreview:null, hover:null, energy:0, bands:new Float32Array(40), recent:[],
   queue:[], nope:new Set(), noExplicit:false, libTab:'history', why:null, nowWhy:null, hintT0:0, spotLost:false
@@ -1191,16 +1191,36 @@ const Synth = {
 };
 
 /* ---------- real 30s preview clips ---------- */
+// Spotify no longer gives new apps preview clips, so the 30-second clip comes from Apple's public iTunes catalogue (matched by title + artist)
+const Clips = {
+  mem:store.get('bb.clips', {}), pend:{},
+  get(t){ return t ? this.mem[t.id] : undefined; },
+  fetch(t){
+    if (!t || this.mem[t.id] !== undefined) return Promise.resolve(t ? this.mem[t.id] : null);
+    if (this.pend[t.id]) return this.pend[t.id];
+    const a0 = (t.artist || '').split(',')[0].trim(), title = (t.title || '').replace(/\s*[\(\[].*?[\)\]]/g, '').replace(/\s+-\s+.*$/, '');
+    const norm = x => (x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return this.pend[t.id] = fetch('https://itunes.apple.com/search?media=music&entity=song&limit=6&term=' + encodeURIComponent(a0 + ' ' + title))
+      .then(r => r.json()).then(j => {
+        const res = (j.results || []).filter(r => r.previewUrl), na = norm(a0).slice(0, 6), nt = norm(title).slice(0, 8);
+        const hit = res.find(r => norm(r.artistName).includes(na) && norm(r.trackName).includes(nt)) || res.find(r => norm(r.artistName).includes(na)) || res[0];
+        const u = hit ? hit.previewUrl : null; this.mem[t.id] = u; this.save(); return u;
+      }).catch(() => null).finally(() => { delete this.pend[t.id]; });
+  },
+  save(){ const k = Object.keys(this.mem); if (k.length > 400) k.slice(0, k.length - 400).forEach(x => delete this.mem[x]); store.set('bb.clips', this.mem); }
+};
 const Preview = {
-  el:null,
+  el:null, primed:false,
+  make(){ if (this.el) return this.el; const ctx = A.init(); this.el = new Audio(); this.el.crossOrigin = 'anonymous'; this.el.setAttribute('playsinline', ''); if (ctx){ try { ctx.createMediaElementSource(this.el).connect(A.music); } catch(e){} } return this.el; },
+  // iPhone: an audio element that has played once during a tap may play again later without one
+  prime(){ if (this.primed || appAudioOff()) return; this.primed = true; const el = this.make(); if (el.src) return; try { el.src = URL.createObjectURL(silentWav()); const p = el.play(); if (p && p.then) p.then(() => { if (!this.live) el.pause(); }).catch(() => {}); } catch(e){} },
   start(url, onEnd, onFail){
-    const ctx = A.init();
-    if (!this.el){ this.el = new Audio(); this.el.crossOrigin = 'anonymous'; if (ctx){ try { ctx.createMediaElementSource(this.el).connect(A.music); } catch(e){} } }
+    this.make(); this.live = true;
     const el = this.el; let failed = false; const fail = () => { if (failed) return; failed = true; el.onerror = null; onFail && onFail(); };
     el.onended = () => onEnd && onEnd(); el.onerror = fail; el.src = url; el.currentTime = 0;
     const p = el.play(); if (p && p.catch) p.catch(fail);
   },
-  stop(){ if (!this.el) return; this.el.onerror = null; this.el.onended = null; this.el.pause(); this.el.removeAttribute('src'); try { this.el.load(); } catch(e){} }
+  stop(){ this.live = false; if (!this.el) return; this.el.onerror = null; this.el.onended = null; this.el.pause(); this.el.removeAttribute('src'); try { this.el.load(); } catch(e){} }
 };
 
 /* ---------- Spotify embed player ---------- */
@@ -1326,12 +1346,18 @@ const Player = {
   play(track, forceLocal){
     const wasApp = this.mode === 'app';
     this.stopAll(); this.track = track; A.init();
-    if (state.source === 'app' && !Remote.ok() && !Remote.told){ Remote.told = true; toast('Connect Spotify for full songs'); }
-    const src = (state.source === 'app' && !Remote.ok()) ? 'spotify' : state.source;
+    
+    const src = (state.source === 'app' && !Remote.ok()) ? 'preview' : state.source;
+    if (wasApp && src !== 'app' && !forceLocal) Remote.pause();
     if (src === 'app' && !forceLocal){ this.mode = 'app'; Remote.play(track); }
     else if (src === 'spotify' && !Embed.failed && !forceLocal){ if (wasApp) Remote.pause(); this.mode = 'embed'; Embed.play(track); }
-    else if (track.preview){ this.mode = 'preview';
-      Preview.start(track.preview, () => this.ended(), () => { if (this.track === track){ this.mode = 'synth'; Synth.start(track, () => this.ended()); UI.note(); } }); }
+    else if (track.preview || (src === 'preview' && Clips.get(track))){ this.mode = 'preview';
+      Preview.start(track.preview || Clips.get(track), () => this.ended(), () => { if (this.track === track){ this.mode = 'synth'; Synth.start(track, () => this.ended()); UI.note(); } }); }
+    else if (src === 'preview' && Clips.get(track) === undefined && !forceLocal){ this.mode = 'preview';
+      Clips.fetch(track).then(u => { if (this.track !== track) return;
+        if (u) Preview.start(u, () => this.ended(), () => { if (this.track === track){ this.mode = 'synth'; Synth.start(track, () => this.ended()); UI.note(); } });
+        else { this.mode = 'synth'; Synth.start(track, () => this.ended()); toast('No preview for this one'); }
+        UI.note(); }); }
     else { this.mode = 'synth'; Synth.start(track, () => this.ended()); }
     UI.showTrack(track);
   },
@@ -1579,6 +1605,7 @@ function spawn(track, replay){
   const alive = bubbles.filter(b => b.state === 'alive');
   if (alive.length >= maxBubbles()){ const old = alive.filter(b => !b.replay && b !== state.autoTarget).sort((a, b) => a.born - b.born)[0]; if (old) old.state = 'fading'; }
   const b = new Bubble(track || pickTrack(), replay); bubbles.push(b);
+  if (state.source === 'preview' && b.track && !b.track.preview) Clips.fetch(b.track);
   portal.flash = replay ? 1.4 : 1; spawnTimer = 0; return b;
 }
 /* search: the party library, plus Spotify when you're connected */
@@ -1906,7 +1933,7 @@ const UI = {
   note(){
     const m = Player.mode;
     $('#pNote').textContent = m === 'app' ? 'Full song in your Spotify app.' : m === 'embed' ? '30-second preview. Connect Spotify for full songs.'
-      : m === 'preview' ? '30-second preview.'
+      : m === 'preview' ? '30-second preview, via Apple Music.'
       : 'A synth sketch of this song.';
     dock.classList.toggle('src-spotify', state.source === 'spotify' && !Embed.failed);
   },
@@ -1930,7 +1957,7 @@ function toast(msg){
   while (box.children.length > 2) box.firstChild.remove();
 }
 function setSource(src, save){
-  state.source = src; if (save !== false) store.set('bb.src4', src);
+  state.source = src; if (save !== false) store.set('bb.src5', src);
   document.querySelectorAll('#sourceSeg button, #sourceSeg2 button').forEach(b => b.classList.toggle('on', b.dataset.src === src));
   if (Player.track) UI.note();
 }
@@ -2031,7 +2058,7 @@ function keepSessionAlive(){
   } catch(e){}
 }
 function unlockAudio(){
-  keepSessionAlive();
+  keepSessionAlive(); try { Preview.prime(); } catch(e){}
   const c = A.init(); if (!c) return;
   if (c.state !== 'running') c.resume().then(updateSoundBtn).catch(() => {});
   if (!primed){ try { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); primed = true; } catch(e){} }
@@ -2540,24 +2567,28 @@ const Dev = {
     const ref = document.createElement('button'); ref.className = 'btn'; ref.textContent = 'Refresh'; ref.addEventListener('click', () => this.load());
     row.appendChild(open); row.appendChild(ref); box.appendChild(p); box.appendChild(row); b.appendChild(box);
   },
+  hereRow(b){ const r = document.createElement('button'); r.className = 'r-item' + (state.source === 'preview' ? ' on' : ''); r.dataset.dev = '__here'; r.dataset.name = 'Here';
+    const m = document.createElement('div'); m.className = 'h-meta'; const a = document.createElement('b'); a.textContent = IS_PHONE ? 'This phone · in Bubble Beats' : 'This browser'; const sp = document.createElement('span'); sp.textContent = '30-second previews, plays right away'; m.appendChild(a); m.appendChild(sp); r.appendChild(m); b.appendChild(r); },
   async load(){
     this.msg('Finding devices…');
     try {
-      const list = await Remote.devices(), b = $('#devBody'); b.innerHTML = '';
+      const list = await Remote.devices(), b = $('#devBody'); b.innerHTML = ''; this.hereRow(b);
       const hasPhone = list.some(d => /smartphone|tablet/i.test(d.type));
       if (IS_PHONE && !hasPhone){ const r = document.createElement('button'); r.className = 'r-item'; r.dataset.dev = '__phone'; r.dataset.name = 'This phone';
         const m = document.createElement('div'); m.className = 'h-meta'; const a = document.createElement('b'); a.textContent = 'This phone'; const sp = document.createElement('span'); sp.textContent = 'Plays in the Spotify app'; m.appendChild(a); m.appendChild(sp); r.appendChild(m); b.appendChild(r); }
       const ph = list.find(d => /smartphone|tablet/i.test(d.type)); if (this.wantPhone && ph){ this.pick(ph.id, ph.name); return; }
-      list.forEach(d => { const r = document.createElement('button'); r.className = 'r-item' + (d.id === Remote.dev ? ' on' : ''); r.dataset.dev = d.id; r.dataset.name = d.name;
+      list.forEach(d => { const r = document.createElement('button'); r.className = 'r-item' + (state.source === 'app' && d.id === Remote.dev ? ' on' : ''); r.dataset.dev = d.id; r.dataset.name = d.name;
         const m = document.createElement('div'); m.className = 'h-meta'; const a = document.createElement('b'); a.textContent = d.name; const s = document.createElement('span'); s.textContent = d.type + (d.is_active ? ' · active now' : ''); m.appendChild(a); m.appendChild(s); r.appendChild(m); b.appendChild(r); });
       this.help(b, hasPhone);
-    } catch(e){ this.msg(e.status === 403 || e.status === 401 ? 'Connect Spotify first.' : "Couldn't load devices."); }
+    } catch(e){ this.msg(!Remote.ok() || e.status === 403 || e.status === 401 ? 'Connect Spotify to use the Spotify app.' : "Couldn't load devices."); this.hereRow($('#devBody')); }
   },
   pick(id, name){
+    if (id === '__here'){ this.wantPhone = false; setSource('preview'); closeModal($('#devSheet')); syncDevice(); toast('Previews play here'); if (Player.track) Player.play(Player.track); return; }
     if (id === '__phone'){ this.wantPhone = true; toast('Play any song in Spotify, then come back'); location.href = Player.track ? 'spotify:track:' + Player.track.id : 'spotify:'; return; }
     this.wantPhone = false;
     Remote.dev = id; Remote.devName = name; Remote.devType = null; store.set('bb.dev2', id); store.set('bb.devn2', name); closeModal($('#devSheet')); syncDevice(); toast('Playing on ' + name);
-    if (Player.track && Player.mode === 'app') Remote.play(Player.track);
+    if (state.source !== 'app') setSource('app');
+    if (Player.track) Player.play(Player.track);
   }
 };
 
