@@ -1039,9 +1039,12 @@ function onCoverReady(id){
 
 /* ---------- audio engine ---------- */
 try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch(e){}
+// true while songs play in the Spotify app: then this page stays silent so iOS doesn't pause Spotify
+function appAudioOff(){ try { return state.source === 'app' && Remote.ok(); } catch(e){ return false; } }
 const A = {
   ctx:null, volume:.8,
   init(){
+    if (appAudioOff()){ if (this.ctx && this.ctx.state === 'running') this.ctx.suspend().catch(() => {}); return null; }
     if (this.ctx){ if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); return this.ctx; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
     const ctx = this.ctx = new AC();
@@ -1994,6 +1997,7 @@ function silentWav(){
   return new Blob([buf], { type:'audio/wav' });
 }
 function keepSessionAlive(){
+  if (appAudioOff()){ try { if (keeper && !keeper.paused) keeper.pause(); } catch(e){} return; }
   try {
     if (!keeper){ keeper = document.createElement('audio'); keeper.setAttribute('playsinline', ''); keeper.setAttribute('webkit-playsinline', ''); keeper.loop = true; keeper.preload = 'auto'; keeper.src = URL.createObjectURL(silentWav()); }
     if (keeper.paused){ const p = keeper.play(); if (p && p.catch) p.catch(() => {}); }
