@@ -575,7 +575,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <div class="ctrl">
         <label>Playback</label>
         <div class="seg" id="sourceSeg" role="group" aria-label="Playback source">
-          <button data-src="spotify">Spotify player</button><button data-src="preview">Clip or sketch</button>
+          <button data-src="app">Spotify app</button><button data-src="spotify">Web player</button><button data-src="preview">Clip</button>
         </div>
       </div>
     </div>
@@ -657,7 +657,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
     <div class="field">
       <label>Default playback</label>
       <div class="seg" id="sourceSeg2" role="group" aria-label="Default playback source">
-        <button data-src="spotify">Spotify player</button><button data-src="preview">30s clip or sketch</button>
+        <button data-src="app">Spotify app</button><button data-src="spotify">Web player</button><button data-src="preview">Clip</button>
       </div>
     </div>
     <div class="note">
@@ -886,7 +886,7 @@ function momentLabel(t){
 
 /* ---------- state ---------- */
 const state = {
-  pool:MOCK.slice(), live:false, mine:false, filter:'all', source:store.get('bb.src3', 'spotify'),
+  pool:MOCK.slice(), live:false, mine:false, filter:'all', source:store.get('bb.src4', 'app'),
   spawnLevel:4, autopop:false, autoNext:0, autoTarget:null, floor:0, hintOut:false,
   history:store.get('bb.history', []), cursor:0, seekPreview:null, hover:null, energy:0, bands:new Float32Array(40), recent:[],
   queue:[], nope:new Set(), noExplicit:false, libTab:'history', why:null, nowWhy:null, hintT0:0, spotLost:false
@@ -1136,18 +1136,73 @@ const Embed = {
   pause(){ this.pending = null; this.wantPlay = false; if (this.ctrl && !this.st.paused) try { this.ctrl.pause(); } catch(e){} }
 };
 
+/* ---------- Spotify app remote (Premium): pops start the song in the Spotify app ---------- */
+const Remote = {
+  st:{ pos:0, dur:200000, paused:true, at:0 }, tok:0, timer:null, dev:null, told:false, endedFired:false, track:null,
+  ok(){ return Spotify.kind === 'pkce' && !!Spotify.token; },
+  now(){ const s = this.st; return s.paused ? s.pos : Math.min(s.dur, s.pos + (performance.now() - s.at)); },
+  async devices(){ const j = await Spotify.api('/me/player/devices'); return (j.devices || []).filter(d => !d.is_restricted); },
+  pick(list){ return list.find(d => d.is_active) || list.find(d => /smartphone|tablet/i.test(d.type)) || list[0]; },
+  async start(track){
+    const body = { uris:['spotify:track:' + track.id] };
+    const go = id => Spotify.api('/me/player/play' + (id ? '?device_id=' + encodeURIComponent(id) : ''), { method:'PUT', body });
+    try { await go(this.dev); return; } catch(e){ if (e.status !== 404) throw e; }
+    const d = this.pick(await this.devices());
+    if (!d){ const er = new Error('nodevice'); er.status = 404; throw er; }
+    this.dev = d.id; await go(d.id);
+  },
+  async play(track){
+    const my = ++this.tok; this.track = track; this.endedFired = false; this.played = false;
+    this.st = { pos:0, dur:track.dur || 200000, paused:false, at:performance.now() };
+    try { await this.start(track); }
+    catch(e){ if (my !== this.tok) return; this.st.paused = true;
+      if (e.status === 403) toast('Spotify app control needs Premium.');
+      else if (e.message === 'nodevice' || e.status === 404) toast('Open the Spotify app, play any song for a second, then pop again.');
+      else toast("Couldn't reach Spotify. Check your connection."); return; }
+    if (my !== this.tok) return;
+    this.st.at = performance.now(); this.schedule(1200);
+  },
+  schedule(ms){ clearTimeout(this.timer); this.timer = setTimeout(() => this.poll(), ms); },
+  async poll(){
+    const my = this.tok, tr = this.track; if (Player.mode !== 'app' || !tr) return;
+    try {
+      const j = await Spotify.api('/me/player');
+      if (my !== this.tok) return;
+      const it = j && j.item;
+      if (it && it.id === tr.id){ this.st = { pos:j.progress_ms || 0, dur:it.duration_ms || this.st.dur, paused:!j.is_playing, at:performance.now() };
+        if (!this.st.paused && this.st.pos > 1000) this.played = true;
+        if (this.st.paused && this.played && (this.st.pos < 1000 || this.st.pos >= this.st.dur - 2000)){ this.finish(); return; }
+        if (!this.st.paused && this.st.dur - this.st.pos < 2500){ this.schedule(Math.max(500, this.st.dur - this.st.pos + 400)); return; } }
+      else if (it && it.id !== tr.id && performance.now() - this.st.at > 4000){ this.finish(); return; }
+    } catch(e){}
+    this.schedule(2500);
+  },
+  finish(){ if (this.endedFired) return; this.endedFired = true; this.pause(); Player.ended(); },
+  stop(){ this.tok++; clearTimeout(this.timer); },
+  pause(){ Spotify.api('/me/player/pause', { method:'PUT' }).catch(() => {}); },
+  toggle(){
+    if (this.st.paused){ const cur = this.now(); this.st = { pos:cur, dur:this.st.dur, paused:false, at:performance.now() }; Spotify.api('/me/player/play', { method:'PUT' }).catch(() => {}); this.schedule(1500); }
+    else { this.st = { pos:this.now(), dur:this.st.dur, paused:true, at:performance.now() }; this.pause(); }
+  },
+  seek(sec){ const ms = Math.max(0, Math.round(sec * 1000)); this.st = { pos:ms, dur:this.st.dur, paused:this.st.paused, at:performance.now() }; Spotify.api('/me/player/seek?position_ms=' + ms, { method:'PUT' }).catch(() => {}); }
+};
+
 /* ---------- player ---------- */
 const Player = {
   track:null, mode:'none',
   play(track, forceLocal){
+    const wasApp = this.mode === 'app';
     this.stopAll(); this.track = track; A.init();
-    if (state.source === 'spotify' && !Embed.failed && !forceLocal){ this.mode = 'embed'; Embed.play(track); }
+    if (state.source === 'app' && !Remote.ok() && !Remote.told){ Remote.told = true; toast('Log in from the You tab to play full songs in the Spotify app.'); }
+    const src = (state.source === 'app' && !Remote.ok()) ? 'spotify' : state.source;
+    if (src === 'app' && !forceLocal){ this.mode = 'app'; Remote.play(track); }
+    else if (src === 'spotify' && !Embed.failed && !forceLocal){ if (wasApp) Remote.pause(); this.mode = 'embed'; Embed.play(track); }
     else if (track.preview){ this.mode = 'preview';
       Preview.start(track.preview, () => this.ended(), () => { if (this.track === track){ this.mode = 'synth'; Synth.start(track, () => this.ended()); UI.note(); } }); }
     else { this.mode = 'synth'; Synth.start(track, () => this.ended()); }
     UI.showTrack(track);
   },
-  stopAll(){ Synth.stop(); Preview.stop(); Embed.pause(); this.clearTap(); },
+  stopAll(){ Synth.stop(); Preview.stop(); Embed.pause(); Remote.stop(); this.clearTap(); },
   needTap(){
     setOpen(true, false); $('#embedWrap').classList.add('needs-tap');
     const n = $('#pNote'); n.classList.add('tap'); n.textContent = 'Your browser needs one tap: press play inside the outlined Spotify player. After that, pops start songs on their own.';
@@ -1156,18 +1211,21 @@ const Player = {
   toggle(){
     unlockAudio();
     if (!this.track) return nextTrack();
+    if (this.mode === 'app') return Remote.toggle();
     if (this.mode === 'embed') return Embed.toggle();
     if (this.mode === 'preview'){ const el = Preview.el; if (el.paused) el.play().catch(() => {}); else el.pause(); return; }
     if (this.mode === 'synth'){ if (!Synth.playing) Synth.start(this.track, () => this.ended()); else if (Synth.paused) Synth.resume(); else Synth.pause(); return; }
     this.play(this.track);
   },
   isPaused(){
+    if (this.mode === 'app') return Remote.st.paused;
     if (this.mode === 'embed') return Embed.st.paused;
     if (this.mode === 'preview') return !Preview.el || Preview.el.paused;
     if (this.mode === 'synth') return !Synth.playing || Synth.paused;
     return true;
   },
   progress(){
+    if (this.mode === 'app') return { pos:Remote.now() / 1000, dur:Remote.st.dur / 1000 };
     if (this.mode === 'embed') return { pos:Embed.st.pos / 1000, dur:Embed.st.dur / 1000 };
     if (this.mode === 'preview' && Preview.el) return { pos:Preview.el.currentTime || 0, dur:Preview.el.duration || 30 };
     if (this.mode === 'synth') return { pos:Synth.elapsed(), dur:30 };
@@ -1175,6 +1233,7 @@ const Player = {
   },
   seek(sec){
     if (!this.track) return;
+    if (this.mode === 'app') return Remote.seek(sec);
     if (this.mode === 'embed'){ try { Embed.ctrl && Embed.ctrl.seek(sec); } catch(e){} return; }
     if (this.mode === 'preview' && Preview.el){ try { Preview.el.currentTime = sec; } catch(e){} return; }
     if (this.mode === 'synth'){ if (!Synth.playing) Synth.start(this.track, () => this.ended()); Synth.seek(sec); }
@@ -1187,8 +1246,8 @@ const Player = {
 
 /* ---------- Spotify Web API ---------- */
 const Spotify = {
-  token:null, exp:0, kind:null, refresh:null, clientId:store.get('bb.clientId', ''),
-  redirectUri(){ return location.origin + location.pathname; },
+  token:null, exp:0, kind:null, refresh:null, clientId:store.get('bb.clientId', '') || '91a5956be4cc4c4f80f39572cb3e3475',
+  redirectUri(){ return location.origin + location.pathname.replace(/index\.html$/, ''); },
   canRedirect(){ return /^https?:$/.test(location.protocol); },
   randStr(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); const cs = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; return Array.from(a, x => cs[x % cs.length]).join(''); },
   b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
@@ -1200,7 +1259,7 @@ const Spotify = {
     const verifier = this.randStr(64); store.set('bb.verifier', verifier); store.set('bb.clientId', id); this.clientId = id;
     if (Entry.isOpen() && Entry.step === 'host') store.set('bb.pendingHost', { name:$('#partyName').value, allowSkip:$('#hostSkip').checked, noExplicit:$('#hostExplicit').checked });
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-    const p = new URLSearchParams({ client_id:id, response_type:'code', redirect_uri:this.redirectUri(), code_challenge_method:'S256', code_challenge:this.b64url(digest), scope:'user-top-read user-library-read user-library-modify user-read-private playlist-modify-private' });
+    const p = new URLSearchParams({ client_id:id, response_type:'code', redirect_uri:this.redirectUri(), code_challenge_method:'S256', code_challenge:this.b64url(digest), scope:'user-top-read user-library-read user-library-modify user-read-private playlist-modify-private user-modify-playback-state user-read-playback-state' });
     location.href = 'https://accounts.spotify.com/authorize?' + p.toString();
   },
   async handleRedirect(){
@@ -1238,7 +1297,7 @@ const Spotify = {
     if (o.body) headers['Content-Type'] = 'application/json';
     const r = await fetch('https://api.spotify.com/v1' + path, { method:o.method || 'GET', headers, body:o.body ? JSON.stringify(o.body) : undefined });
     if (r.status === 401){ this.lost(); throw new Error('Your Spotify session expired. Connect again.'); }
-    if (!r.ok) throw new Error('Spotify returned an error (' + r.status + ').');
+    if (!r.ok){ const er = new Error('Spotify returned an error (' + r.status + ').'); er.status = r.status; throw er; }
     const tx = await r.text(); return tx ? JSON.parse(tx) : {};
   },
   // the session dropped: say so once, keep the songs already loaded, and point to the profile to reconnect
@@ -1287,9 +1346,7 @@ const Spotify = {
     this.me = me;
     if (!tracks.length) return null;
     const artistIds = [...new Set(tracks.map(([t]) => t.artists && t.artists[0] && t.artists[0].id).filter(Boolean))], genres = {};
-    for (let i = 0; i < artistIds.length; i += 50){
-      try { const j = await this.api('/artists?ids=' + artistIds.slice(i, i + 50).join(',')); (j.artists || []).forEach(a => { if (a) genres[a.id] = a.genres || []; }); } catch(e){ break; }
-    }
+    await Promise.all(artistIds.slice(0, 60).map(id => this.api('/artists/' + id).then(a => { if (a && a.id) genres[a.id] = a.genres || []; }).catch(() => {})));
     return tracks.map(([it, why]) => { const imgs = (it.album && it.album.images) || [], a0 = it.artists && it.artists[0];
       const year = parseInt(((it.album && it.album.release_date) || '').slice(0, 4), 10) || 0;
       return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:this.genreOf(a0 && genres[a0.id]), m:this.momentsOf(a0 && genres[a0.id], year),
@@ -1697,7 +1754,7 @@ const UI = {
   },
   note(){
     const m = Player.mode;
-    $('#pNote').textContent = m === 'embed' ? 'Playing from Spotify. Signed out, you hear a 30-second preview. Signed in to Spotify in this browser, press play inside the Spotify player for the full song.'
+    $('#pNote').textContent = m === 'app' ? 'Playing in your Spotify app, full song. Keep Spotify open on this phone.' : m === 'embed' ? 'Playing from Spotify. Signed out, you hear a 30-second preview. Signed in to Spotify in this browser, press play inside the Spotify player for the full song.'
       : m === 'preview' ? "Playing Spotify's 30-second preview clip."
       : "A synth sketch in this track's genre and tempo. The open icon on each song in your library takes you to the real track on Spotify.";
     dock.classList.toggle('src-spotify', state.source === 'spotify' && !Embed.failed);
@@ -1721,7 +1778,7 @@ function toast(msg){
   while (box.children.length > 2) box.firstChild.remove();
 }
 function setSource(src, save){
-  state.source = src; if (save !== false) store.set('bb.src3', src);
+  state.source = src; if (save !== false) store.set('bb.src4', src);
   document.querySelectorAll('#sourceSeg button, #sourceSeg2 button').forEach(b => b.classList.toggle('on', b.dataset.src === src));
   if (Player.track) UI.note();
 }
@@ -1982,7 +2039,7 @@ const Saved = {
     }
     store.set('bb.saved', this.list); syncLike(); renderHistory(); renderProfile();
   },
-  async remote(t, method){ if (Spotify.kind !== 'pkce' || !Spotify.token) return false; try { await Spotify.api('/me/tracks?ids=' + encodeURIComponent(t.id), { method }); return true; } catch(e){ return false; } }
+  async remote(t, method){ if (Spotify.kind !== 'pkce' || !Spotify.token) return false; try { await Spotify.api('/me/library?uris=' + encodeURIComponent('spotify:track:' + t.id), { method }); return true; } catch(e){ return false; } }
 };
 function syncLike(){
   const t = Player.track, on = !!t && Saved.has(t.id), b = $('#likeBtn');
@@ -2015,7 +2072,7 @@ function renderProfile(){
 }
 function renderDevice(){
   const d = Party.data, pop = $('#devicePop');
-  const how = Player.mode === 'embed' ? 'Spotify player' : Player.mode === 'preview' ? '30-second clip' : Player.track ? 'Synth sketch' : 'Ready';
+  const how = Player.mode === 'app' ? 'Spotify app' : Player.mode === 'embed' ? 'Web player' : Player.mode === 'preview' ? '30-second clip' : Player.track ? 'Synth sketch' : 'Ready';
   pop.innerHTML = Party.role === 'guest'
     ? `<h4>Playing on</h4><div class="dp-row">${ICON_SPEAKER}<div><b>${esc(d.host)}'s speaker</b><span>${esc(d.name)}</span></div></div>
        <p>Your pops go to ${esc(d.host)}'s queue. In this prototype they also play here, so you can hear the flow.</p>`
@@ -2249,7 +2306,7 @@ function setupParty(){
   $('#deviceBtn').addEventListener('click', e => { renderDevice(); togglePop('devicePop', e.currentTarget); });
   document.addEventListener('pointerdown', e => { if (!e.target.closest('.pop, [aria-haspopup]')) closePops(); });
   $('#profileMenu').addEventListener('click', e => {
-    if (e.target.closest('#pmConnect')){ closePops(); openSettings(); return; }
+    if (e.target.closest('#pmConnect')){ closePops(); Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message)); return; }
     const it = e.target.closest('[data-pm]'); if (!it) return; closePops(); const k = it.dataset.pm;
     if (k === 'saved' || k === 'parties'){ state.libTab = k; renderHistory(); toggleHistory(true); }
     else if (k === 'party'){ if (Party.data) openPartySheet(); else { Entry.resetHost(); Entry.open('host'); } }
