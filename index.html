@@ -552,6 +552,10 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 .results:not([hidden]) ~ .s-empty{display:none}
 
 
+.dev-help{margin-top:14px;padding:14px;border-radius:14px;background:var(--raise)}
+.dev-help p{margin:0 0 12px;font-size:13px;line-height:1.5;color:var(--muted)}
+.dev-actions{display:flex;gap:10px}
+.dev-actions .btn{flex:1;justify-content:center;height:44px;text-decoration:none;display:flex;align-items:center}
 /* gradient fills */
 .btn.primary,.choice.primary,.hdr-connect,.np-connect,.chip.on,.avatar,.switch input:checked{background:var(--grad);border-color:transparent}
 .btn.primary:hover,.choice.primary:hover,.hdr-connect:active,.hdr-connect:hover{background:var(--grad);border-color:transparent;filter:brightness(.92)}
@@ -1210,18 +1214,18 @@ const Embed = {
 
 /* ---------- Spotify app remote (Premium): pops start the song in the Spotify app ---------- */
 const Remote = {
-  st:{ pos:0, dur:200000, paused:true, at:0 }, tok:0, timer:null, dev:store.get('bb.dev', '') || null, devName:store.get('bb.devn', '') || '', told:false, endedFired:false, track:null,
+  st:{ pos:0, dur:200000, paused:true, at:0 }, tok:0, timer:null, dev:store.get('bb.dev2', '') || null, devName:store.get('bb.devn2', '') || '', told:false, endedFired:false, track:null,
   ok(){ return Spotify.kind === 'pkce' && !!Spotify.token; },
   now(){ const s = this.st; return s.paused ? s.pos : Math.min(s.dur, s.pos + (performance.now() - s.at)); },
   async devices(){ const j = await Spotify.api('/me/player/devices'); return (j.devices || []).filter(d => !d.is_restricted); },
-  pick(list){ return list.find(d => /smartphone|tablet/i.test(d.type)) || list.find(d => d.is_active) || list[0]; },
+  pick(list){ const ph = list.find(d => /smartphone|tablet/i.test(d.type)); return IS_PHONE ? ph : (ph || list.find(d => d.is_active) || list[0]); },
   async start(track){
     const body = { uris:['spotify:track:' + track.id] };
     const go = id => Spotify.api('/me/player/play?device_id=' + encodeURIComponent(id), { method:'PUT', body });
     if (this.dev){ try { await go(this.dev); return; } catch(e){ if (e.status !== 404) throw e; this.dev = null; } }
     const d = this.pick(await this.devices());
     if (!d){ const er = new Error('nodevice'); er.status = 404; throw er; }
-    this.dev = d.id; this.devName = d.name; store.set('bb.dev', d.id); store.set('bb.devn', d.name); await go(d.id); syncDevice();
+    this.dev = d.id; this.devName = d.name; await go(d.id); syncDevice();
   },
   async play(track){
     const my = ++this.tok; this.track = track; this.endedFired = false; this.played = false;
@@ -1229,7 +1233,7 @@ const Remote = {
     try { await this.start(track); }
     catch(e){ if (my !== this.tok) return; this.st.paused = true;
       if (e.status === 403) toast('Spotify app control needs Premium.');
-      else if (e.message === 'nodevice' || e.status === 404) toast('Open the Spotify app, play any song for a second, then pop again.');
+      else if (e.message === 'nodevice' || e.status === 404){ toast(IS_PHONE ? "Spotify can't see this phone yet. Open the Spotify app, then come back." : 'Open the Spotify app, play any song for a second, then pop again.'); Dev.open(); }
       else toast("Couldn't reach Spotify. Check your connection."); return; }
     if (my !== this.tok) return;
     this.st.at = performance.now(); this.schedule(1200);
@@ -1436,12 +1440,12 @@ const Spotify = {
     await Promise.all(aids.map(a => this.api('/artists/' + a).then(r => { if (r && r.id) genres[r.id] = r.genres || []; }).catch(() => {})));
     state.pool = list.map(it => { const imgs = (it.album && it.album.images) || [], a0 = it.artists && it.artists[0], g = a0 && genres[a0.id];
       const year = parseInt(((it.album && it.album.release_date) || '').slice(0, 4), 10) || 0;
-      return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:this.genreOf(g), m:this.momentsOf(g, year),
+      return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:this.genreOf(g), m:playlistTags(g, year, a0 && a0.name),
         cover:(imgs[1] || imgs[0] || {}).url || null, preview:it.preview_url || null, live:true, ex:it.explicit, why:'From ' + name, url:(it.external_urls && it.external_urls.spotify) || null }); });
-    state.live = true; state.mine = true; state.plName = name; updateStatus(); return list.length;
+    state.live = true; state.mine = true; state.plName = name; setChips(chipsFor(state.pool), name); updateStatus(); return list.length;
   },
   async loadAll(){
-    state.plName = null;
+    state.plName = null; if (chipList) setChips(null);
     UI.connState('Fetching fresh tracks…');
     if (this.kind === 'pkce'){
       const mine = await this.loadMine().catch(() => null);
@@ -1456,7 +1460,7 @@ const Spotify = {
     const withPrev = tracks.filter(t => t.preview).length;
     toast(`Connected. ${tracks.length} live tracks${withPrev ? `, ${withPrev} with clips` : ''}.`);
   },
-  disconnect(){ this.token = null; this.exp = 0; this.kind = null; this.refresh = null; this.me = null; state.spotLost = false; store.del('bb.auth'); state.pool = MOCK.slice(); state.live = false; state.mine = false; updateStatus(); toast('Disconnected. Back to the party library.'); }
+  disconnect(){ if (chipList) setChips(null); this.token = null; this.exp = 0; this.kind = null; this.refresh = null; this.me = null; state.spotLost = false; store.del('bb.auth'); state.pool = MOCK.slice(); state.live = false; state.mine = false; updateStatus(); toast('Disconnected. Back to the party library.'); }
 };
 
 /* ---------- canvas world ---------- */
@@ -1914,13 +1918,36 @@ function toggleHistory(force){
   h.classList.toggle('open', open);
   syncTabs();
 }
+let chipList = null, chipHead = 'Moments';
+const escH = x => String(x).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+function renderChips(){
+  const wrap = $('#chips'), all = [{ key:'all', label:chipList ? 'All' : 'All night' }, ...(chipList || MOMENTS)];
+  if (state.filter !== 'all' && !all.some(g => g.key === state.filter)) state.filter = 'all';
+  wrap.innerHTML = `<span class="chips-h">${escH(chipHead)}</span>` + all.map(g => `<button class="chip${g.key === state.filter ? ' on' : ''}" data-g="${escH(g.key)}" aria-pressed="${g.key === state.filter}">${escH(g.label)}</button>`).join('');
+  wrap.scrollLeft = 0;
+}
+function setChips(list, head){ chipList = list && list.length ? list : null; chipHead = chipList ? (head || 'Playlist') : 'Moments'; state.filter = 'all'; state.recent = []; renderChips(); }
+// playlist songs get tags for genre family, decade and lead artist; chips are made from the common ones
+const FAMILIES = [['K-pop',/k-pop/],['Bollywood',/bollywood|filmi|desi|punjabi|indian/],['Latin',/latin|reggaeton|urbano|bachata|salsa/],['Afro',/afro/],['Hip hop',/hip hop|rap|trap|drill|grime/],['R&B',/r&b|rnb/],['Soul',/soul|funk|motown/],['House',/house/],['Techno',/techno/],['Electronic',/edm|electro|dubstep|big room|trance|drum and bass/],['Dance',/dance/],['Indie',/indie/],['Rock',/rock|punk|grunge|metal|emo/],['Jazz',/jazz/],['Chill',/lo-?fi|chill|ambient|downtempo/],['Folk',/folk|acoustic|singer-songwriter/],['Country',/country/],['Classical',/classical|orchestra|piano/],['Pop',/pop/]];
+function playlistTags(genres, year, artist){
+  const g = (genres || []).join(' | ').toLowerCase(), out = [];
+  FAMILIES.forEach(([label, re]) => { if (re.test(g)){ const k = 'g:' + label; M[k] = { key:k, label }; out.push(k); } });
+  if (year){ const d = Math.floor(year / 10) * 10, label = d >= 2000 ? d + 's' : String(d).slice(2) + 's', k = 'd:' + d; M[k] = { key:k, label }; out.push(k); }
+  if (artist){ const k = 'a:' + artist; M[k] = { key:k, label:artist }; out.push(k); }
+  return out;
+}
+function chipsFor(pool){
+  const n = {}, total = pool.length; pool.forEach(t => (t.m || []).forEach(k => n[k] = (n[k] || 0) + 1));
+  const ok = k => n[k] >= 3 && n[k] < total, by = pre => Object.keys(n).filter(k => k.startsWith(pre) && ok(k)).sort((a, b) => n[b] - n[a]);
+  const gs = by('g:').slice(0, 3), ds = by('d:').slice(0, 3).sort((a, b) => +b.slice(2) - +a.slice(2)), as = by('a:').slice(0, 2);
+  return [...gs, ...ds, ...as].slice(0, 7).map(k => ({ key:k, label:M[k].label + (k.startsWith('a:') ? ' · ' + n[k] : '') }));
+}
 function buildChips(){
-  const wrap = $('#chips'), all = [{ key:'all', label:'All night' }, ...MOMENTS];
-  wrap.innerHTML = '<span class="chips-h">Moments</span>' + all.map(g => `<button class="chip${g.key === state.filter ? ' on' : ''}" data-g="${g.key}" aria-pressed="${g.key === state.filter}">${g.label}</button>`).join('');
+  const wrap = $('#chips'); renderChips();
   wrap.addEventListener('click', e => {
     const c = e.target.closest('.chip'); if (!c) return;
     if (c.dataset.g !== 'all' && !state.pool.some(t => (t.m || []).includes(c.dataset.g) && !(state.noExplicit && t.ex))){
-      toast(`No ${M[c.dataset.g].label} songs in this library yet. Try searching for one.`); return; }
+      toast(`No ${(M[c.dataset.g] || { label:'matching' }).label} songs here yet. Try searching for one.`); return; }
     state.filter = c.dataset.g; state.recent = [];
     wrap.querySelectorAll('.chip').forEach(x => { const on = x.dataset.g === state.filter; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
     spawnTimer = spawnInterval() * .75;
@@ -2435,22 +2462,36 @@ function setupParty(){
 
 /* ---------- choose the device ---------- */
 function syncDevice(){ const t = $('#npDevText'); if (t) t.textContent = Remote.devName ? 'Playing on ' + Remote.devName : (Remote.dev ? 'Playing on your chosen device' : 'Choose where it plays'); }
+const IS_PHONE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 const Dev = {
   wired:false,
   msg(text){ const b = $('#devBody'); b.innerHTML = ''; const p = document.createElement('p'); p.className = 'lead'; p.textContent = text; b.appendChild(p); },
   async open(){
     openModal('devSheet');
     if (!this.wired){ this.wired = true; $('#devBody').addEventListener('click', e => { const r = e.target.closest('[data-dev]'); if (r) this.pick(r.dataset.dev, r.dataset.name); }); }
+    if (!this.vis){ this.vis = true; document.addEventListener('visibilitychange', () => { if (!document.hidden && $('#devSheet').classList.contains('open')) setTimeout(() => this.load(), 900); }); }
+    this.load();
+  },
+  help(b, hasPhone){
+    const box = document.createElement('div'); box.className = 'dev-help';
+    const p = document.createElement('p'); p.textContent = hasPhone ? 'Not seeing the right device? Open Spotify on it, then refresh.' : "Don't see this phone? Spotify only lists it while the Spotify app is open. Open it, play any song for a second, then come back here.";
+    const row = document.createElement('div'); row.className = 'dev-actions';
+    const open = document.createElement('a'); open.className = 'btn primary'; open.textContent = 'Open Spotify app'; open.href = Player.track ? 'spotify:track:' + Player.track.id : 'spotify:';
+    const ref = document.createElement('button'); ref.className = 'btn'; ref.textContent = 'Refresh'; ref.addEventListener('click', () => this.load());
+    row.appendChild(open); row.appendChild(ref); box.appendChild(p); box.appendChild(row); b.appendChild(box);
+  },
+  async load(){
     this.msg('Looking for your devices…');
     try {
       const list = await Remote.devices(), b = $('#devBody'); b.innerHTML = '';
-      if (!list.length) return this.msg('No devices found. Open the Spotify app on your phone, play any song for a second, then tap Change again.');
+      const hasPhone = list.some(d => /smartphone|tablet/i.test(d.type));
       list.forEach(d => { const r = document.createElement('button'); r.className = 'r-item' + (d.id === Remote.dev ? ' on' : ''); r.dataset.dev = d.id; r.dataset.name = d.name;
         const m = document.createElement('div'); m.className = 'h-meta'; const a = document.createElement('b'); a.textContent = d.name; const s = document.createElement('span'); s.textContent = d.type + (d.is_active ? ' · active now' : ''); m.appendChild(a); m.appendChild(s); r.appendChild(m); b.appendChild(r); });
+      this.help(b, hasPhone);
     } catch(e){ this.msg(e.status === 403 || e.status === 401 ? 'Spotify needs you to connect again. Use Connect Spotify first.' : "Couldn't load your devices. Check your connection."); }
   },
   pick(id, name){
-    Remote.dev = id; Remote.devName = name; store.set('bb.dev', id); store.set('bb.devn', name); closeModal($('#devSheet')); syncDevice(); toast('Playing on ' + name);
+    Remote.dev = id; Remote.devName = name; store.set('bb.dev2', id); store.set('bb.devn2', name); closeModal($('#devSheet')); syncDevice(); toast('Playing on ' + name);
     if (Player.track && Player.mode === 'app') Remote.play(Player.track);
   }
 };
