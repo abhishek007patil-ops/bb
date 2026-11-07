@@ -1251,12 +1251,21 @@ const Remote = {
   async devices(){ const j = await Spotify.api('/me/player/devices'); return (j.devices || []).filter(d => !d.is_restricted); },
   pick(list){ const ph = list.find(d => /smartphone|tablet/i.test(d.type)); return IS_PHONE ? ph : (ph || list.find(d => d.is_active) || list[0]); },
   async start(track){
-    const body = { uris:['spotify:track:' + track.id] };
-    const go = id => Spotify.api('/me/player/play?device_id=' + encodeURIComponent(id), { method:'PUT', body });
-    if (this.dev){ try { await go(this.dev); return; } catch(e){ if (e.status !== 404) throw e; this.dev = null; } }
-    const d = this.pick(await this.devices());
-    if (!d){ const er = new Error('nodevice'); er.status = 404; throw er; }
-    this.dev = d.id; this.devName = d.name; await go(d.id); syncDevice();
+    const uri = 'spotify:track:' + track.id, q = id => '?device_id=' + encodeURIComponent(id);
+    const choose = async () => { const list = await this.devices(), d = this.pick(list);
+      if (!d){ const er = new Error('nodevice'); er.status = 404; throw er; }
+      this.dev = d.id; this.devName = d.name; this.devType = d.type; syncDevice(); return list; };
+    if (!this.dev) await choose();
+    if (!this.devType){ try { const d = (await this.devices()).find(x => x.id === this.dev); if (d) this.devType = d.type; else await choose(); } catch(e){} }
+    const viaPlay = () => Spotify.api('/me/player/play' + q(this.dev), { method:'PUT', body:{ uris:[uri] } });
+    const viaSkip = async () => {
+      await Spotify.api('/me/player/queue?uri=' + encodeURIComponent(uri) + '&device_id=' + encodeURIComponent(this.dev), { method:'POST' });
+      await Spotify.api('/me/player/next' + q(this.dev), { method:'POST' });
+      setTimeout(() => Spotify.api('/me/player/play' + q(this.dev), { method:'PUT' }).catch(() => {}), 900);
+    };
+    const phoneDev = /smartphone|tablet/i.test(this.devType || '');
+    try { if (phoneDev){ try { await viaSkip(); } catch(e){ if (e.status === 404) throw e; await viaPlay(); } } else await viaPlay(); }
+    catch(e){ if (e.status !== 404) throw e; this.dev = null; this.devType = null; await choose(); await viaPlay(); }
   },
   async play(track){
     const my = ++this.tok; this.track = track; this.endedFired = false; this.played = false;
@@ -1268,7 +1277,7 @@ const Remote = {
       else toast("Couldn't reach Spotify. Check your connection."); return; }
     if (my !== this.tok) return;
     this.st.at = performance.now(); this.schedule(1200);
-    clearTimeout(this.vt); this.vt = setTimeout(() => this.verify(my, track), 3500);
+    clearTimeout(this.vt); this.vt = setTimeout(() => this.verify(my, track), 4500);
   },
   async verify(my, tr){
     if (my !== this.tok || Player.mode !== 'app') return;
@@ -1279,7 +1288,8 @@ const Remote = {
       this.st.paused = true;
       const dn = (j && j.device && j.device.name) || this.devName || 'your phone';
       $('#pNote').textContent = 'Spotify on ' + dn + " didn't start. Open Spotify, press play once, then pop again.";
-      toast("Spotify didn't start. Open it and press play once."); Dev.open();
+      const ours = j && j.device && j.device.id === this.dev;
+      toast(ours ? "Spotify paused. Open it, press play, come back." : "Spotify didn't start. Pick where to play."); if (!ours) Dev.open();
     } catch(e){}
   },
   schedule(ms){ clearTimeout(this.timer); this.timer = setTimeout(() => this.poll(), ms); },
@@ -2546,7 +2556,7 @@ const Dev = {
   pick(id, name){
     if (id === '__phone'){ this.wantPhone = true; toast('Play any song in Spotify, then come back'); location.href = Player.track ? 'spotify:track:' + Player.track.id : 'spotify:'; return; }
     this.wantPhone = false;
-    Remote.dev = id; Remote.devName = name; store.set('bb.dev2', id); store.set('bb.devn2', name); closeModal($('#devSheet')); syncDevice(); toast('Playing on ' + name);
+    Remote.dev = id; Remote.devName = name; Remote.devType = null; store.set('bb.dev2', id); store.set('bb.devn2', name); closeModal($('#devSheet')); syncDevice(); toast('Playing on ' + name);
     if (Player.track && Player.mode === 'app') Remote.play(Player.track);
   }
 };
