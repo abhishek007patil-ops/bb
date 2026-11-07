@@ -427,7 +427,11 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 }
 @media (prefers-reduced-motion:reduce){ .history,.panel-wrap{transition:none} .core .orb::before,.core .orb::after{animation:none;opacity:0} }
 /* ===== Mobile version: Spotify-style mini-player above a tab bar, Sound Core in the middle tab ===== */
-.top{grid-template-columns:minmax(0,1fr);grid-template-areas:"brand"}
+.top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand conn"}
+.hdr-connect{grid-area:conn;height:34px;padding:0 14px;border-radius:999px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;white-space:nowrap}
+.hdr-connect:active{background:var(--accent-press)}
+.np-connect{display:block;width:100%;margin:12px 0 4px;height:46px;font-size:15px}
+.np-connect[hidden],.hdr-connect[hidden]{display:none}
 .top-actions{display:none}
 .brand small{display:block}
 .chips{left:var(--cl);right:var(--cl);top:calc(var(--gt) + 50px)}
@@ -513,6 +517,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 
 <header class="top">
   <button class="brand" id="brandBtn" title="Back to start" aria-label="Back to start"><span class="brand-orb"></span><div><b>Bubble Beats<span class="by">by Abi</span></b><small id="brandSub">Pop a bubble, find a song</small></div></button>
+  <button class="hdr-connect" id="hdrConnect" hidden>Connect Spotify</button>
 </header>
 
 <nav class="chips" id="chips" aria-label="Party moment"></nav>
@@ -566,6 +571,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <div id="toolsSlot"></div>
       <div class="embed" id="embedWrap"><div id="embed"></div></div>
       <p class="p-note" id="pNote"></p>
+      <button class="btn primary np-connect" id="npConnect" hidden>Connect Spotify for full songs</button>
       <div class="vis"><canvas id="spectrum"></canvas></div>
       <div class="pcol"><span class="p-label">Up next</span><div class="upnext" id="upNext"></div></div>
       <div class="ctrl">
@@ -1769,8 +1775,9 @@ function updateStatus(){
   $('#statusText').textContent = state.mine ? `Your Spotify · ${state.pool.length} songs` : state.live ? `Spotify live · ${state.pool.length} tracks` : `Party library · ${state.pool.length} songs`;
   UI.connState(state.live ? `Connected (${Spotify.kind === 'pkce' ? 'your Spotify account' : 'client credentials'}).` : 'Not connected. Using the party library.');
   $('#disconnectBtn').disabled = !state.live; $('#refreshBtn').disabled = !state.live;
-  renderProfile(); if (Entry.el) Entry.renderSpot();
+  renderProfile(); if (Entry.el) Entry.renderSpot(); syncConnect();
 }
+function syncConnect(){ const need = !(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a) a.hidden = !need; if (b) b.hidden = !need; }
 function toast(msg){
   const box = $('#toasts'), t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 360); }, 3000);
@@ -2359,6 +2366,8 @@ function setupPhone(){
   });
   $('#ssClose').addEventListener('click', closeSearch);
   $('#mPlay').addEventListener('click', () => Player.toggle());
+  const goConnect = () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message));
+  $('#hdrConnect').addEventListener('click', goConnect); $('#npConnect').addEventListener('click', goConnect); syncConnect();
   $('#mLike').addEventListener('click', () => Saved.toggle(Player.track));
 }
 
