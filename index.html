@@ -1211,7 +1211,7 @@ const Clips = {
 };
 const Preview = {
   el:null, primed:false,
-  make(){ if (this.el) return this.el; const ctx = A.init(); this.el = new Audio(); this.el.crossOrigin = 'anonymous'; this.el.setAttribute('playsinline', ''); if (ctx){ try { ctx.createMediaElementSource(this.el).connect(A.music); } catch(e){} } return this.el; },
+  make(){ if (this.el) return this.el; const ctx = IS_PHONE ? null : A.init(); this.el = new Audio(); this.el.setAttribute('playsinline', ''); if (!IS_PHONE) this.el.crossOrigin = 'anonymous'; if (ctx){ try { ctx.createMediaElementSource(this.el).connect(A.music); } catch(e){} } return this.el; },
   // iPhone: an audio element that has played once during a tap may play again later without one
   prime(){ if (this.primed || appAudioOff()) return; this.primed = true; const el = this.make(); if (el.src) return; try { el.src = URL.createObjectURL(silentWav()); const p = el.play(); if (p && p.then) p.then(() => { if (!this.live) el.pause(); }).catch(() => {}); } catch(e){} },
   start(url, onEnd, onFail){
@@ -2051,7 +2051,8 @@ function silentWav(){
   return new Blob([buf], { type:'audio/wav' });
 }
 function keepSessionAlive(){
-  if (appAudioOff()){ try { if (keeper && !keeper.paused) keeper.pause(); } catch(e){} return; }
+  try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch(e){}
+  if (appAudioOff() || (IS_PHONE && state.source === 'preview')){ try { if (keeper && !keeper.paused) keeper.pause(); } catch(e){} return; }
   try {
     if (!keeper){ keeper = document.createElement('audio'); keeper.setAttribute('playsinline', ''); keeper.setAttribute('webkit-playsinline', ''); keeper.loop = true; keeper.preload = 'auto'; keeper.src = URL.createObjectURL(silentWav()); }
     if (keeper.paused){ const p = keeper.play(); if (p && p.catch) p.catch(() => {}); }
