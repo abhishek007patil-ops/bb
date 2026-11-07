@@ -582,6 +582,20 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 .top.need-connect .brand .by{display:none}
 .brand b{white-space:nowrap}
 .hdr-connect{padding:0 14px}
+/* one bottom panel */
+.bar{margin:0 10px max(8px, env(safe-area-inset-bottom, 0px));background:#1d1928;border:1px solid var(--line);border-radius:20px;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+.mini{margin:0;height:62px;padding:0 6px 0 10px;background:none;box-shadow:none;border-radius:20px 20px 0 0}
+.m-prog{left:12px;right:12px;bottom:0}
+.tabs{height:60px;padding-bottom:0;background:none;border-top:1px solid var(--line);border-radius:0 0 20px 20px}
+.tab .face .dot{box-shadow:0 0 0 2px #1d1928}
+.tab-core{display:grid;place-items:center;height:100%;position:relative}
+.tabs .core{position:relative;left:auto;top:auto;width:52px;height:52px;transform:none}
+.tabs .hump,.tabs .charge,.tabs .core .orb::before,.tabs .core .orb::after{display:none}
+.tabs .core .orb{width:38px;height:38px;box-shadow:0 0 calc(14px + var(--c, 0) * 14px + var(--p, 0) * 16px) rgba(208,47,74,calc(.35 + var(--c, 0) * .3 + var(--p, 0) * .3))}
+.tabs .core::before{content:"";position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(236,106,156,.55) 0%,rgba(208,47,74,.22) 40%,transparent 70%);
+  opacity:calc(.12 + var(--c, 0) * .45 + var(--p, 0) * .5);transform:scale(calc(.5 + var(--c, 0) * .32 + var(--p, 0) * .3))}
+.tabs .core .tip{bottom:calc(100% + 22px)}
 /* gradient fills */
 .btn.primary,.choice.primary,.hdr-connect,.np-connect,.chip.on,.avatar,.switch input:checked{background:var(--grad);border-color:transparent}
 .btn.primary:hover,.choice.primary:hover,.hdr-connect:active,.hdr-connect:hover{background:var(--grad);border-color:transparent;filter:brightness(.92)}
@@ -1761,6 +1775,7 @@ function drawHint(){
 function updateCore(){
   coreOrb.style.setProperty('--e', (state.energy * .14 + portal.flash * .08).toFixed(3));
   chargeC.style.strokeDashoffset = (CHARGE_LEN * (1 - (state.spawnLevel > 0 ? clamp(portal.charge, 0, 1) : 0))).toFixed(1);
+  { const cb = coreOrb.parentNode, ch = state.spawnLevel > 0 ? clamp(portal.charge, 0, 1) : 0; cb.style.setProperty('--c', (ch * ch).toFixed(3)); cb.style.setProperty('--p', Math.min(1, portal.flash).toFixed(3)); }
 }
 function fitText(t, maxW){ if (cx.measureText(t).width <= maxW) return t; let s = t; while (s.length > 1 && cx.measureText(s + '…').width > maxW) s = s.slice(0, -1); return s.trimEnd() + '…'; }
 function drawBubble(b){
@@ -2178,7 +2193,7 @@ function setup(){
   cv.addEventListener('touchend', e => { e.preventDefault(); unlockAudio(); dragEnd(e.timeStamp); }, { passive:false });
   cv.addEventListener('touchcancel', dragCancel);
 
-  try { new ResizeObserver(() => { document.documentElement.style.setProperty('--dock-h', $('.bar').offsetHeight + 'px'); sizeSpectrum(); computePortal(); }).observe(dock); } catch(e){}
+  try { new ResizeObserver(() => { document.documentElement.style.setProperty('--dock-h', Math.round(innerHeight - $('.bar').getBoundingClientRect().top) + 'px'); sizeSpectrum(); computePortal(); }).observe(dock); } catch(e){}
   window.addEventListener('resize', resize);
 }
 
