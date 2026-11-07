@@ -652,7 +652,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <div class="m-prog"><span id="pMiniBar"></span></div>
     </div>
     <nav class="tabs" aria-label="Main">
-      <button class="tab on" data-tab="home" aria-label="Bubbles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="14" r="5"/><circle cx="17" cy="7" r="3"/></svg><span>Bubbles</span></button>
+      <button class="tab" data-tab="library" id="libraryBtn" aria-label="Your library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v16M10 4v16M14.5 4.6l4.6 15"/></svg><span>Library</span></button>
       <button class="tab" data-tab="search" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search</span></button>
       <div class="tab-core">
     <button class="core" id="coreBtn" title="Sound Core: release a bubble (B)" aria-label="Sound Core: release a bubble">
@@ -661,7 +661,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
           <span class="tip" aria-hidden="true">Release a song bubble<kbd>B</kbd></span>
         </button>
       </div>
-      <button class="tab" data-tab="library" id="libraryBtn" aria-label="Your library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v16M10 4v16M14.5 4.6l4.6 15"/></svg><span>Library</span></button>
+      <button class="tab" data-tab="playlists" id="playlistsBtn" aria-label="Your playlists"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Playlists</span></button>
       <button class="tab" data-tab="you" id="profileBtn" aria-label="Profile and Spotify account" aria-haspopup="true" aria-expanded="false"><span class="face" id="profileFace"></span><span>You</span></button>
     </nav>
   </div>
@@ -1865,7 +1865,7 @@ function updateStatus(){
   $('#disconnectBtn').disabled = !state.live; $('#refreshBtn').disabled = !state.live;
   renderProfile(); if (Entry.el) Entry.renderSpot(); syncConnect();
 }
-function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = false; a.textContent = on ? 'Playlists' : 'Connect Spotify'; a.dataset.mode = on ? 'pl' : 'cn'; } if (b) b.hidden = on; const dv = $('#npDevice'); if (dv) dv.hidden = !on; syncDevice(); }
+function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = on; a.textContent = 'Connect Spotify'; a.dataset.mode = 'cn'; } if (b) b.hidden = on; const dv = $('#npDevice'); if (dv) dv.hidden = !on; syncDevice(); }
 function toast(msg){
   const box = $('#toasts'), t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 360); }, 3000);
@@ -2503,7 +2503,7 @@ const PL = {
   msg(text, withBtn){ const b = $('#plBody'); b.innerHTML = ''; const p = document.createElement('p'); p.className = 'lead'; p.textContent = text; b.appendChild(p);
     if (withBtn){ const x = document.createElement('button'); x.className = 'btn primary'; x.textContent = withBtn; x.addEventListener('click', () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message))); b.appendChild(x); } },
   async open(){
-    openModal('plSheet');
+    openModal('plSheet'); $('#plSheet')._onClose = () => syncTabs(); syncTabs();
     if (!this.wired){ this.wired = true; $('#plBody').addEventListener('click', e => { const r = e.target.closest('[data-pl]'); if (r) this.pick(r.dataset.pl, r.dataset.name); }); }
     if (!this.connected()) return this.msg('Connect Spotify to use your own playlists.', 'Connect Spotify');
     this.msg('Loading your playlists…');
@@ -2537,7 +2537,8 @@ const PL = {
 /* ---------- phone shell: tabs + search sheet ---------- */
 function syncTabs(){
   const lib = $('#history').classList.contains('open'), srch = $('#searchSheet').classList.contains('open'), you = $('#profileMenu').classList.contains('open');
-  const cur = you ? 'you' : srch ? 'search' : lib ? 'library' : 'home';
+  const pl = $('#plSheet').classList.contains('open');
+  const cur = you ? 'you' : pl ? 'playlists' : srch ? 'search' : lib ? 'library' : 'home';
   document.querySelectorAll('.tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.tab === cur));
 }
 function openSearch(){ toggleHistory(false); closePops(); setOpen(false, false); $('#searchSheet').classList.add('open'); syncTabs(); setTimeout(() => $('#q').focus(), 120); }
@@ -2547,6 +2548,7 @@ function setupPhone(){
     const t = e.target.closest('.tab'); if (!t) return; const k = t.dataset.tab;
     if (k === 'home'){ closeSearch(); toggleHistory(false); closePops(); setOpen(false, false); }
     else if (k === 'search'){ if ($('#searchSheet').classList.contains('open')) closeSearch(); else openSearch(); }
+    else if (k === 'playlists'){ closeSearch(); toggleHistory(false); closePops(); setOpen(false, false); PL.open(); }
     else { closeSearch(); if (k === 'you') toggleHistory(false); }
     syncTabs();
   });
