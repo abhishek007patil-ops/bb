@@ -1276,19 +1276,22 @@ const Remote = {
       const j = await Spotify.api('/me/player');
       if (my !== this.tok) return;
       const it = j && j.item;
-      if (it && it.id === tr.id){ this.st = { pos:j.progress_ms || 0, dur:it.duration_ms || this.st.dur, paused:!j.is_playing, at:performance.now() };
+      const same = it && (it.id === tr.id || (it.linked_from && it.linked_from.id === tr.id) || it.uri === 'spotify:track:' + tr.id);
+      if (same){ this.st = { pos:j.progress_ms || 0, dur:it.duration_ms || this.st.dur, paused:!j.is_playing, at:performance.now() };
         if (!this.st.paused && this.st.pos > 1000) this.played = true;
         if (this.st.paused && this.played && (this.st.pos < 1000 || this.st.pos >= this.st.dur - 2000)){ this.finish(); return; }
         if (!this.st.paused && this.st.dur - this.st.pos < 2500){ this.schedule(Math.max(500, this.st.dur - this.st.pos + 400)); return; } }
-      else if (it && it.id !== tr.id && performance.now() - this.st.at > 4000){ this.finish(); return; }
+      else if (it && !same && this.played && performance.now() - this.st.at > 4000){ this.finish(); return; }
     } catch(e){}
     this.schedule(2500);
   },
-  finish(){ if (this.endedFired) return; this.endedFired = true; this.pause(); Player.ended(); },
+  finish(){ if (this.endedFired) return; this.endedFired = true; Player.ended(); },
   stop(){ this.tok++; clearTimeout(this.timer); },
   pause(){ Spotify.api('/me/player/pause', { method:'PUT' }).catch(() => {}); },
   toggle(){
-    if (this.st.paused){ const cur = this.now(); this.st = { pos:cur, dur:this.st.dur, paused:false, at:performance.now() }; Spotify.api('/me/player/play', { method:'PUT' }).catch(() => {}); this.schedule(1500); }
+    if (this.st.paused){ const tr = this.track || Player.track; if (!this.played && this.st.pos < 1500 && tr) return this.play(tr);
+      const cur = this.now(); this.st = { pos:cur, dur:this.st.dur, paused:false, at:performance.now() };
+      Spotify.api('/me/player/play' + (this.dev ? '?device_id=' + encodeURIComponent(this.dev) : ''), { method:'PUT' }).catch(() => { if (tr) this.play(tr); }); this.schedule(1500); }
     else { this.st = { pos:this.now(), dur:this.st.dur, paused:true, at:performance.now() }; this.pause(); }
   },
   seek(sec){ const ms = Math.max(0, Math.round(sec * 1000)); this.st = { pos:ms, dur:this.st.dur, paused:this.st.paused, at:performance.now() }; Spotify.api('/me/player/seek?position_ms=' + ms, { method:'PUT' }).catch(() => {}); }
@@ -1318,6 +1321,7 @@ const Player = {
   toggle(){
     unlockAudio();
     if (!this.track) return nextTrack();
+    if (this.mode !== 'app' && state.source === 'app' && Remote.ok()) return this.play(this.track);
     if (this.mode === 'app') return Remote.toggle();
     if (this.mode === 'embed') return Embed.toggle();
     if (this.mode === 'preview'){ const el = Preview.el; if (el.paused) el.play().catch(() => {}); else el.pause(); return; }
