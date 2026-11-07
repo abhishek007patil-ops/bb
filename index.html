@@ -432,6 +432,11 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 .hdr-connect:active{background:var(--accent-press)}
 .np-connect{display:block;width:100%;margin:12px 0 4px;height:46px;font-size:15px}
 .np-connect[hidden],.hdr-connect[hidden]{display:none}
+.np-device{display:flex;align-items:center;gap:10px;width:100%;margin:8px 0 4px;padding:12px 14px;border-radius:12px;background:var(--raise);color:var(--ink);font-size:14px;text-align:left}
+.np-device svg{width:18px;height:18px;flex:none;color:var(--muted)}
+.np-device span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.np-device em{font-style:normal;color:var(--accent-hi);font-size:13px;font-weight:600}
+.np-device[hidden]{display:none}
 .pl-list{max-height:62vh;overflow:auto;display:flex;flex-direction:column;gap:2px}
 .pl-list .r-item{padding:9px 8px}
 .pl-list .r-item.on{background:var(--raise)}
@@ -576,6 +581,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <div class="embed" id="embedWrap"><div id="embed"></div></div>
       <p class="p-note" id="pNote"></p>
       <button class="btn primary np-connect" id="npConnect" hidden>Connect Spotify for full songs</button>
+      <button class="np-device" id="npDevice" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><span id="npDevText">Choose where it plays</span><em>Change</em></button>
       <div class="vis"><canvas id="spectrum"></canvas></div>
       <div class="pcol"><span class="p-label">Up next</span><div class="upnext" id="upNext"></div></div>
       <div class="ctrl">
@@ -765,6 +771,13 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
     </div>
   </div>
 </section>
+
+<div class="modal" id="devSheet" role="dialog" aria-modal="true" aria-labelledby="devTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="devTitle">Play on</h2><button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div id="devBody" class="pl-list"></div>
+  </div>
+</div>
 
 <div class="modal" id="plSheet" role="dialog" aria-modal="true" aria-labelledby="plTitle">
   <div class="sheet">
@@ -1156,18 +1169,18 @@ const Embed = {
 
 /* ---------- Spotify app remote (Premium): pops start the song in the Spotify app ---------- */
 const Remote = {
-  st:{ pos:0, dur:200000, paused:true, at:0 }, tok:0, timer:null, dev:null, told:false, endedFired:false, track:null,
+  st:{ pos:0, dur:200000, paused:true, at:0 }, tok:0, timer:null, dev:store.get('bb.dev', '') || null, devName:store.get('bb.devn', '') || '', told:false, endedFired:false, track:null,
   ok(){ return Spotify.kind === 'pkce' && !!Spotify.token; },
   now(){ const s = this.st; return s.paused ? s.pos : Math.min(s.dur, s.pos + (performance.now() - s.at)); },
   async devices(){ const j = await Spotify.api('/me/player/devices'); return (j.devices || []).filter(d => !d.is_restricted); },
-  pick(list){ return list.find(d => d.is_active) || list.find(d => /smartphone|tablet/i.test(d.type)) || list[0]; },
+  pick(list){ return list.find(d => /smartphone|tablet/i.test(d.type)) || list.find(d => d.is_active) || list[0]; },
   async start(track){
     const body = { uris:['spotify:track:' + track.id] };
-    const go = id => Spotify.api('/me/player/play' + (id ? '?device_id=' + encodeURIComponent(id) : ''), { method:'PUT', body });
-    try { await go(this.dev); return; } catch(e){ if (e.status !== 404) throw e; }
+    const go = id => Spotify.api('/me/player/play?device_id=' + encodeURIComponent(id), { method:'PUT', body });
+    if (this.dev){ try { await go(this.dev); return; } catch(e){ if (e.status !== 404) throw e; this.dev = null; } }
     const d = this.pick(await this.devices());
     if (!d){ const er = new Error('nodevice'); er.status = 404; throw er; }
-    this.dev = d.id; await go(d.id);
+    this.dev = d.id; this.devName = d.name; store.set('bb.dev', d.id); store.set('bb.devn', d.name); await go(d.id); syncDevice();
   },
   async play(track){
     const my = ++this.tok; this.track = track; this.endedFired = false; this.played = false;
@@ -1807,7 +1820,7 @@ function updateStatus(){
   $('#disconnectBtn').disabled = !state.live; $('#refreshBtn').disabled = !state.live;
   renderProfile(); if (Entry.el) Entry.renderSpot(); syncConnect();
 }
-function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = false; a.textContent = on ? 'Playlists' : 'Connect Spotify'; a.dataset.mode = on ? 'pl' : 'cn'; } if (b) b.hidden = on; }
+function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = false; a.textContent = on ? 'Playlists' : 'Connect Spotify'; a.dataset.mode = on ? 'pl' : 'cn'; } if (b) b.hidden = on; const dv = $('#npDevice'); if (dv) dv.hidden = !on; syncDevice(); }
 function toast(msg){
   const box = $('#toasts'), t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 360); }, 3000);
@@ -2379,6 +2392,28 @@ function setupParty(){
   window.addEventListener('offline', net); window.addEventListener('online', () => { net(); toast('Back online'); }); net();
 }
 
+/* ---------- choose the device ---------- */
+function syncDevice(){ const t = $('#npDevText'); if (t) t.textContent = Remote.devName ? 'Playing on ' + Remote.devName : (Remote.dev ? 'Playing on your chosen device' : 'Choose where it plays'); }
+const Dev = {
+  wired:false,
+  msg(text){ const b = $('#devBody'); b.innerHTML = ''; const p = document.createElement('p'); p.className = 'lead'; p.textContent = text; b.appendChild(p); },
+  async open(){
+    openModal('devSheet');
+    if (!this.wired){ this.wired = true; $('#devBody').addEventListener('click', e => { const r = e.target.closest('[data-dev]'); if (r) this.pick(r.dataset.dev, r.dataset.name); }); }
+    this.msg('Looking for your devices…');
+    try {
+      const list = await Remote.devices(), b = $('#devBody'); b.innerHTML = '';
+      if (!list.length) return this.msg('No devices found. Open the Spotify app on your phone, play any song for a second, then tap Change again.');
+      list.forEach(d => { const r = document.createElement('button'); r.className = 'r-item' + (d.id === Remote.dev ? ' on' : ''); r.dataset.dev = d.id; r.dataset.name = d.name;
+        const m = document.createElement('div'); m.className = 'h-meta'; const a = document.createElement('b'); a.textContent = d.name; const s = document.createElement('span'); s.textContent = d.type + (d.is_active ? ' · active now' : ''); m.appendChild(a); m.appendChild(s); r.appendChild(m); b.appendChild(r); });
+    } catch(e){ this.msg(e.status === 403 || e.status === 401 ? 'Spotify needs you to connect again. Use Connect Spotify first.' : "Couldn't load your devices. Check your connection."); }
+  },
+  pick(id, name){
+    Remote.dev = id; Remote.devName = name; store.set('bb.dev', id); store.set('bb.devn', name); closeModal($('#devSheet')); syncDevice(); toast('Playing on ' + name);
+    if (Player.track && Player.mode === 'app') Remote.play(Player.track);
+  }
+};
+
 /* ---------- your playlists ---------- */
 const PL = {
   wired:false, busy:false,
@@ -2436,7 +2471,7 @@ function setupPhone(){
   $('#ssClose').addEventListener('click', closeSearch);
   $('#mPlay').addEventListener('click', () => Player.toggle());
   const goConnect = () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message));
-  $('#hdrConnect').addEventListener('click', () => $('#hdrConnect').dataset.mode === 'pl' ? PL.open() : goConnect()); $('#npConnect').addEventListener('click', goConnect); syncConnect();
+  $('#hdrConnect').addEventListener('click', () => $('#hdrConnect').dataset.mode === 'pl' ? PL.open() : goConnect()); $('#npConnect').addEventListener('click', goConnect); $('#npDevice').addEventListener('click', () => Dev.open()); syncConnect();
   $('#mLike').addEventListener('click', () => Saved.toggle(Player.track));
 }
 
