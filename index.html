@@ -1268,6 +1268,19 @@ const Remote = {
       else toast("Couldn't reach Spotify. Check your connection."); return; }
     if (my !== this.tok) return;
     this.st.at = performance.now(); this.schedule(1200);
+    clearTimeout(this.vt); this.vt = setTimeout(() => this.verify(my, track), 3500);
+  },
+  async verify(my, tr){
+    if (my !== this.tok || Player.mode !== 'app') return;
+    try {
+      const j = await Spotify.api('/me/player'); if (my !== this.tok) return;
+      const it = j && j.item, same = it && (it.id === tr.id || (it.linked_from && it.linked_from.id === tr.id) || it.uri === 'spotify:track:' + tr.id);
+      if (same && j.is_playing) return;
+      this.st.paused = true;
+      const dn = (j && j.device && j.device.name) || this.devName || 'your phone';
+      $('#pNote').textContent = 'Spotify on ' + dn + " didn't start. Open Spotify, press play once, then pop again.";
+      toast("Spotify didn't start. Open it and press play once."); Dev.open();
+    } catch(e){}
   },
   schedule(ms){ clearTimeout(this.timer); this.timer = setTimeout(() => this.poll(), ms); },
   async poll(){
