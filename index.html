@@ -432,6 +432,10 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 .hdr-connect:active{background:var(--accent-press)}
 .np-connect{display:block;width:100%;margin:12px 0 4px;height:46px;font-size:15px}
 .np-connect[hidden],.hdr-connect[hidden]{display:none}
+.pl-list{max-height:62vh;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.pl-list .r-item{padding:9px 8px}
+.pl-list .r-item.on{background:var(--raise)}
+.pl-list .lead{margin:6px 2px 12px}
 .top-actions{display:none}
 .brand small{display:block}
 .chips{left:var(--cl);right:var(--cl);top:calc(var(--gt) + 50px)}
@@ -690,6 +694,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
   <button class="pm-item" data-pm="saved" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg><span>Saved songs</span><em id="pmSaved"></em></button>
   <button class="pm-item" data-pm="parties" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Past parties</span><em id="pmParties"></em></button>
   <button class="pm-item" data-pm="party" id="pmParty" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Party settings</span></button>
+  <button class="pm-item" data-pm="playlists" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h12M4 11h12M4 16h7"/><path d="M19 14v6M16 17h6" /></svg><span>Your playlists</span></button>
   <button class="pm-item" data-pm="spotify" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Spotify connection</span></button>
   <div class="pm-sep"></div>
   <button class="pm-item quiet" data-pm="home" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>Start screen</span></button>
@@ -760,6 +765,13 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
     </div>
   </div>
 </section>
+
+<div class="modal" id="plSheet" role="dialog" aria-modal="true" aria-labelledby="plTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="plTitle">Your playlists</h2><button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div id="plBody" class="pl-list"></div>
+  </div>
+</div>
 
 <div class="modal" id="partySheet" role="dialog" aria-modal="true" aria-labelledby="psTitle">
   <div class="sheet">
@@ -1264,7 +1276,7 @@ const Spotify = {
     const verifier = this.randStr(64); store.set('bb.verifier', verifier); store.set('bb.clientId', id); this.clientId = id;
     if (Entry.isOpen() && Entry.step === 'host') store.set('bb.pendingHost', { name:$('#partyName').value, allowSkip:$('#hostSkip').checked, noExplicit:$('#hostExplicit').checked });
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-    const p = new URLSearchParams({ client_id:id, response_type:'code', redirect_uri:this.redirectUri(), code_challenge_method:'S256', code_challenge:this.b64url(digest), scope:'user-top-read user-library-read user-library-modify user-read-private playlist-modify-private user-modify-playback-state user-read-playback-state' });
+    const p = new URLSearchParams({ client_id:id, response_type:'code', redirect_uri:this.redirectUri(), code_challenge_method:'S256', code_challenge:this.b64url(digest), scope:'user-top-read user-library-read user-library-modify user-read-private playlist-modify-private user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative' });
     location.href = 'https://accounts.spotify.com/authorize?' + p.toString();
   },
   async handleRedirect(){
@@ -1357,7 +1369,25 @@ const Spotify = {
       return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:this.genreOf(a0 && genres[a0.id]), m:this.momentsOf(a0 && genres[a0.id], year),
         cover:(imgs[1] || imgs[0] || {}).url || null, preview:it.preview_url || null, live:true, ex:it.explicit, why, url:(it.external_urls && it.external_urls.spotify) || null }); });
   },
+  async loadPlaylist(id, name){
+    const raw = [];
+    for (let off = 0; off < 200; off += 50){
+      const j = await this.api('/playlists/' + encodeURIComponent(id) + '/items?limit=50&offset=' + off);
+      const arr = j.items || []; arr.forEach(x => { const it = x && (x.item || x.track); if (it && it.id && it.type !== 'episode') raw.push(it); });
+      if (arr.length < 50) break;
+    }
+    const seen = new Set(), list = raw.filter(it => !seen.has(it.id) && seen.add(it.id));
+    if (!list.length) return 0;
+    const genres = {}, aids = [...new Set(list.map(t => t.artists && t.artists[0] && t.artists[0].id).filter(Boolean))].slice(0, 60);
+    await Promise.all(aids.map(a => this.api('/artists/' + a).then(r => { if (r && r.id) genres[r.id] = r.genres || []; }).catch(() => {})));
+    state.pool = list.map(it => { const imgs = (it.album && it.album.images) || [], a0 = it.artists && it.artists[0], g = a0 && genres[a0.id];
+      const year = parseInt(((it.album && it.album.release_date) || '').slice(0, 4), 10) || 0;
+      return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:this.genreOf(g), m:this.momentsOf(g, year),
+        cover:(imgs[1] || imgs[0] || {}).url || null, preview:it.preview_url || null, live:true, ex:it.explicit, why:'From ' + name, url:(it.external_urls && it.external_urls.spotify) || null }); });
+    state.live = true; state.mine = true; state.plName = name; updateStatus(); return list.length;
+  },
   async loadAll(){
+    state.plName = null;
     UI.connState('Fetching fresh tracks…');
     if (this.kind === 'pkce'){
       const mine = await this.loadMine().catch(() => null);
@@ -1772,12 +1802,12 @@ const UI = {
   connState(t){ $('#connState').textContent = t; }
 };
 function updateStatus(){
-  $('#statusText').textContent = state.mine ? `Your Spotify · ${state.pool.length} songs` : state.live ? `Spotify live · ${state.pool.length} tracks` : `Party library · ${state.pool.length} songs`;
+  $('#statusText').textContent = state.mine ? `Your Spotify · ${state.plName ? state.plName + ' · ' : ''}${state.pool.length} songs` : state.live ? `Spotify live · ${state.pool.length} tracks` : `Party library · ${state.pool.length} songs`;
   UI.connState(state.live ? `Connected (${Spotify.kind === 'pkce' ? 'your Spotify account' : 'client credentials'}).` : 'Not connected. Using the party library.');
   $('#disconnectBtn').disabled = !state.live; $('#refreshBtn').disabled = !state.live;
   renderProfile(); if (Entry.el) Entry.renderSpot(); syncConnect();
 }
-function syncConnect(){ const need = !(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a) a.hidden = !need; if (b) b.hidden = !need; }
+function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = false; a.textContent = on ? 'Playlists' : 'Connect Spotify'; a.dataset.mode = on ? 'pl' : 'cn'; } if (b) b.hidden = on; }
 function toast(msg){
   const box = $('#toasts'), t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 360); }, 3000);
@@ -2316,6 +2346,7 @@ function setupParty(){
     const it = e.target.closest('[data-pm]'); if (!it) return; closePops(); const k = it.dataset.pm;
     if (k === 'saved' || k === 'parties'){ state.libTab = k; renderHistory(); toggleHistory(true); }
     else if (k === 'party'){ if (Party.data) openPartySheet(); else { Entry.resetHost(); Entry.open('host'); } }
+    else if (k === 'playlists') PL.open();
     else if (k === 'spotify') openSettings();
     else if (k === 'home') Entry.open('home');
     else if (k === 'disconnect') Spotify.disconnect();
@@ -2348,6 +2379,44 @@ function setupParty(){
   window.addEventListener('offline', net); window.addEventListener('online', () => { net(); toast('Back online'); }); net();
 }
 
+/* ---------- your playlists ---------- */
+const PL = {
+  wired:false, busy:false,
+  connected(){ return !!(Spotify.kind === 'pkce' && Spotify.token); },
+  msg(text, withBtn){ const b = $('#plBody'); b.innerHTML = ''; const p = document.createElement('p'); p.className = 'lead'; p.textContent = text; b.appendChild(p);
+    if (withBtn){ const x = document.createElement('button'); x.className = 'btn primary'; x.textContent = withBtn; x.addEventListener('click', () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message))); b.appendChild(x); } },
+  async open(){
+    openModal('plSheet');
+    if (!this.wired){ this.wired = true; $('#plBody').addEventListener('click', e => { const r = e.target.closest('[data-pl]'); if (r) this.pick(r.dataset.pl, r.dataset.name); }); }
+    if (!this.connected()) return this.msg('Connect Spotify to use your own playlists.', 'Connect Spotify');
+    this.msg('Loading your playlists…');
+    try {
+      const me = Spotify.me || await Spotify.api('/me').catch(() => null); let items = [];
+      for (let off = 0; off < 150; off += 50){ const j = await Spotify.api('/me/playlists?limit=50&offset=' + off); const a = j.items || []; items = items.concat(a); if (a.length < 50) break; }
+      const b = $('#plBody'); b.innerHTML = '';
+      const mk = (id, name, sub, img, on) => { const r = document.createElement('button'); r.className = 'r-item' + (on ? ' on' : ''); r.dataset.pl = id; r.dataset.name = name;
+        const im = document.createElement('img'); im.alt = ''; if (img) im.src = img; r.appendChild(im);
+        const m = document.createElement('div'); m.className = 'h-meta'; const t1 = document.createElement('b'); t1.textContent = name; const t2 = document.createElement('span'); t2.textContent = sub; m.appendChild(t1); m.appendChild(t2); r.appendChild(m); b.appendChild(r); };
+      mk('__all', 'My top and liked songs', 'The default mix', null, !state.plName);
+      if (!items.length){ const p = document.createElement('p'); p.className = 'lead'; p.textContent = 'No playlists found on this account.'; b.appendChild(p); }
+      items.filter(Boolean).forEach(p => { const total = (p.items && p.items.total != null) ? p.items.total : (p.tracks && p.tracks.total) || 0; const mine = !me || !p.owner || p.owner.id === me.id || p.collaborative;
+        mk(p.id, p.name || 'Untitled', total + ' songs' + (mine ? '' : ' · not yours'), (p.images && p.images[p.images.length - 1] || {}).url, state.plName === p.name); });
+    } catch(e){
+      if (e.status === 403 || e.status === 401) this.msg('Spotify needs your OK to read playlists. Tap below and agree once.', 'Allow playlists');
+      else this.msg("Couldn't load your playlists. Check your connection and try again.");
+    }
+  },
+  async pick(id, name){
+    if (this.busy) return; this.busy = true; closeModal($('#plSheet')); toast('Loading ' + (id === '__all' ? 'your songs' : name) + '…');
+    try {
+      if (id === '__all'){ await Spotify.loadAll(); }
+      else { const n = await Spotify.loadPlaylist(id, name);
+        if (!n) toast("Spotify only lets this app read playlists you own or collaborate on, or that playlist is empty."); else toast(name + ' is in the bubbles. ' + n + ' songs.'); }
+    } catch(e){ toast(e.status === 403 ? 'Spotify blocked that playlist. Only your own playlists can be read.' : "Couldn't load that playlist."); }
+    this.busy = false;
+  }
+};
+
 /* ---------- phone shell: tabs + search sheet ---------- */
 function syncTabs(){
   const lib = $('#history').classList.contains('open'), srch = $('#searchSheet').classList.contains('open'), you = $('#profileMenu').classList.contains('open');
@@ -2367,7 +2436,7 @@ function setupPhone(){
   $('#ssClose').addEventListener('click', closeSearch);
   $('#mPlay').addEventListener('click', () => Player.toggle());
   const goConnect = () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message));
-  $('#hdrConnect').addEventListener('click', goConnect); $('#npConnect').addEventListener('click', goConnect); syncConnect();
+  $('#hdrConnect').addEventListener('click', () => $('#hdrConnect').dataset.mode === 'pl' ? PL.open() : goConnect()); $('#npConnect').addEventListener('click', goConnect); syncConnect();
   $('#mLike').addEventListener('click', () => Saved.toggle(Player.track));
 }
 
@@ -2375,7 +2444,7 @@ function setupPhone(){
 async function bootSpotify(){
   try { if (await Spotify.handleRedirect()){ await Spotify.loadAll(); return; }
     if (Spotify.restore() && await Spotify.ensure()) await Spotify.loadAll(); }
-  catch(err){ Spotify.token = null; }
+  catch(err){ if (!(Spotify.kind === 'pkce' && Spotify.token)) Spotify.token = null; else toast('Connected to Spotify, but no songs came back. Pick a playlist with the Playlists button.'); }
   updateStatus();
 }
 buildChips(); setup(); setupParty(); setupPhone(); resize(); renderHistory(); applyMode(); updateStatus(); updateSoundBtn(); updateNav();
