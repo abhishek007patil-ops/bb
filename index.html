@@ -556,6 +556,20 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 .dev-help p{margin:0 0 12px;font-size:13px;line-height:1.5;color:var(--muted)}
 .dev-actions{display:flex;gap:10px}
 .dev-actions .btn{flex:1;justify-content:center;height:44px;text-decoration:none;display:flex;align-items:center}
+.fab{position:fixed;top:auto;right:calc(var(--gr) + 4px);bottom:calc(var(--dock-h, 146px) + 14px);width:44px;height:44px;border-radius:50%;opacity:1;color:var(--ink);background:rgba(35,31,48,.88);border:1px solid var(--line2);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 6px 18px rgba(0,0,0,.35);z-index:30}
+.fab:hover,.fab:active{background:rgba(52,46,70,.95);color:#fff}
+.fab svg{width:21px;height:21px}
+.fab-clear{bottom:calc(var(--dock-h, 146px) + 68px)}
+.fab.away{opacity:0;pointer-events:none}
+.dock.open ~ .fab,.history.open ~ .fab{opacity:0;pointer-events:none}
+/* full-screen panels */
+.history,.search-sheet{top:0;bottom:0;left:var(--cl);right:var(--cl);width:auto;border:0;border-radius:0;box-shadow:none;background:var(--bg);z-index:50}
+.history{padding-top:var(--gt)}
+.search-sheet{padding:calc(var(--gt) + 6px) 20px calc(env(safe-area-inset-bottom, 0px) + 16px)}
+#plSheet{padding:0;place-items:stretch;background:var(--bg)}
+#plSheet .sheet{width:100%;max-width:430px;height:100%;max-height:none;margin:0 auto;border:0;border-radius:0;box-shadow:none;background:var(--bg);display:flex;flex-direction:column;padding:calc(var(--gt) + 6px) 20px calc(env(safe-area-inset-bottom, 0px) + 16px)}
+#plSheet .pl-list{max-height:none;flex:1;min-height:0}
+#plSheet .sheet-head h2{font-size:24px}
 /* gradient fills */
 .btn.primary,.choice.primary,.hdr-connect,.np-connect,.chip.on,.avatar,.switch input:checked{background:var(--grad);border-color:transparent}
 .btn.primary:hover,.choice.primary:hover,.hdr-connect:active,.hdr-connect:hover{background:var(--grad);border-color:transparent;filter:brightness(.92)}
@@ -586,7 +600,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <button class="clear-q" id="clearQ" aria-label="Clear search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
     <div class="results" id="results" role="listbox" hidden></div>
-    <p class="s-empty">Find any song in the party library by title or artist. Connect Spotify from the You tab to search every song.</p>
+    <p class="s-empty">Search by song or artist.</p>
   </div>
 </section>
 
@@ -752,7 +766,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
   <button class="pm-item quiet" data-pm="disconnect" id="pmDisconnect" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Disconnect Spotify</span></button>
 </div>
 <div class="pop device-pop" id="devicePop" role="dialog" aria-label="Playing on"></div>
-<button class="qhint" id="qhint" title="Queue: drag a bubble here to add it" aria-label="Show the queue">
+<button class="qhint fab fab-clear" id="fabClear" title="Clear bubbles" aria-label="Clear bubbles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 20 10"/><path d="m17 7-8.5 8.5"/><path d="M8.5 15.5 4 20h6l3-3"/><path d="m6 13 5 5"/></svg></button>
+<button class="qhint fab" id="qhint" title="Queue: drag a bubble here to add it" aria-label="Show the queue">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h13M3 18h8"/><path d="M18 15v6M15 18h6"/></svg>
 </button>
 <div class="qzone" id="qzone" aria-hidden="true">
@@ -766,7 +781,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
     <div class="step" data-step="home">
       <span class="entry-orb"></span>
       <h1>Bubble Beats</h1>
-      <p class="tagline">Songs float up as bubbles. Pop one and it plays.<br>Made for parties, fun on your own.</p>
+      <p class="tagline">Pop a bubble, hear a song.</p>
       <button class="choice resume" id="resumeBtn" data-go="resume" hidden>
         <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8z"/></svg>
         <span class="ct"><b>Resume party</b><span id="resumeText"></span></span>
@@ -774,12 +789,12 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       </button>
       <button class="choice primary" id="hostChoice" data-go="host">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><path d="M12 6h.01"/></svg>
-        <span class="ct"><b>Start a party</b><span>Music plays on this device. Friends add songs with a code.</span></span>
+        <span class="ct"><b>Start a party</b><span>Friends add songs with a code</span></span>
         <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
       </button>
       <button class="choice" data-go="join">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h3M21 17v4h-1"/></svg>
-        <span class="ct"><b>Join a party</b><span>Scan the host's QR code or type their code.</span></span>
+        <span class="ct"><b>Join a party</b><span>Scan or type the host's code</span></span>
         <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
       </button>
       <button class="link-btn" id="exploreBtn" data-go="explore">Just explore songs</button>
@@ -793,14 +808,14 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
         <span class="sw-text"><b id="hostSpotName">Spotify not connected</b><span id="hostSpotSub"></span></span>
         <button class="btn" id="hostConnect">Connect</button>
       </div>
-      <label class="switch"><span class="sw-text"><b>Guests can skip songs</b><span>Off means guests can only add to the queue.</span></span><input type="checkbox" id="hostSkip"></label>
-      <label class="switch"><span class="sw-text"><b>Hide explicit songs</b><span>Uses Spotify's explicit tag. Handy for family parties.</span></span><input type="checkbox" id="hostExplicit"></label>
+      <label class="switch"><span class="sw-text"><b>Guests can skip songs</b><span>Otherwise they can only add</span></span><input type="checkbox" id="hostSkip"></label>
+      <label class="switch"><span class="sw-text"><b>Hide explicit songs</b><span>Good for family parties</span></span><input type="checkbox" id="hostExplicit"></label>
       <button class="btn primary full" id="hostStart">Start party</button>
     </div>
 
     <div class="step" data-step="live" hidden>
       <h2 class="mid">You're live</h2>
-      <p class="tagline">Friends scan this or type the code to add songs.<br>They don't need Spotify.</p>
+      <p class="tagline">Friends scan or type the code. No Spotify needed.</p>
       <div class="qr" id="liveQr"></div>
       <div class="code-big" id="liveCode"></div>
       <div class="copy-row"><input id="liveLink" readonly aria-label="Party link"><button class="btn" data-copy="#liveLink">Copy link</button></div>
@@ -809,10 +824,10 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 
     <div class="step" data-step="join" hidden>
       <div class="step-head"><button class="icon-btn" data-go="home" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button><h2>Join a party</h2></div>
-      <p class="tagline left">Type the 4-character code on the host's screen.</p>
+      <p class="tagline left">Enter the host's 4-letter code.</p>
       <input class="code-input" id="joinCode" maxlength="4" autocomplete="off" spellcheck="false" aria-label="Party code" placeholder="CODE">
       <button class="btn primary full" id="joinBtn">Join party</button>
-      <p class="small mid">This prototype has no server, so any code opens a demo party hosted by Maya.</p>
+      <p class="small mid">Demo: any code opens a sample party.</p>
     </div>
   </div>
 </section>
@@ -1233,7 +1248,7 @@ const Remote = {
     try { await this.start(track); }
     catch(e){ if (my !== this.tok) return; this.st.paused = true;
       if (e.status === 403) toast('Spotify app control needs Premium.');
-      else if (e.message === 'nodevice' || e.status === 404){ toast(IS_PHONE ? "Spotify can't see this phone yet. Open the Spotify app, then come back." : 'Open the Spotify app, play any song for a second, then pop again.'); Dev.open(); }
+      else if (e.message === 'nodevice' || e.status === 404){ toast(IS_PHONE ? 'Pick where to play' : 'Open Spotify, play a song, then pop again'); Dev.open(); }
       else toast("Couldn't reach Spotify. Check your connection."); return; }
     if (my !== this.tok) return;
     this.st.at = performance.now(); this.schedule(1200);
@@ -1269,7 +1284,7 @@ const Player = {
   play(track, forceLocal){
     const wasApp = this.mode === 'app';
     this.stopAll(); this.track = track; A.init();
-    if (state.source === 'app' && !Remote.ok() && !Remote.told){ Remote.told = true; toast('Log in from the You tab to play full songs in the Spotify app.'); }
+    if (state.source === 'app' && !Remote.ok() && !Remote.told){ Remote.told = true; toast('Connect Spotify for full songs'); }
     const src = (state.source === 'app' && !Remote.ok()) ? 'spotify' : state.source;
     if (src === 'app' && !forceLocal){ this.mode = 'app'; Remote.play(track); }
     else if (src === 'spotify' && !Embed.failed && !forceLocal){ if (wasApp) Remote.pause(); this.mode = 'embed'; Embed.play(track); }
@@ -1281,7 +1296,7 @@ const Player = {
   stopAll(){ Synth.stop(); Preview.stop(); Embed.pause(); Remote.stop(); this.clearTap(); },
   needTap(){
     setOpen(true, false); $('#embedWrap').classList.add('needs-tap');
-    const n = $('#pNote'); n.classList.add('tap'); n.textContent = 'Your browser needs one tap: press play inside the outlined Spotify player. After that, pops start songs on their own.';
+    const n = $('#pNote'); n.classList.add('tap'); n.textContent = 'Tap play in the outlined player once.';
   },
   clearTap(){ $('#embedWrap').classList.remove('needs-tap'); const n = $('#pNote'); if (n.classList.contains('tap')){ n.classList.remove('tap'); UI.note(); } },
   toggle(){
@@ -1569,7 +1584,7 @@ const Search = {
     if (rem.length) html += `<div class="r-head">Spotify</div>` + rem.map((t, i) => row(t, local.length + i)).join('');
     if (!this.items.length) html += `<div class="r-empty">${loading ? 'Searching Spotify…' : `No songs match “${esc(q)}”.`}</div>`;
     else if (loading) html += `<div class="r-empty">Searching Spotify…</div>`;
-    if (!Spotify.token) html += `<div class="r-foot">Searching the party library. Connect Spotify from the You tab to search every song.</div>`;
+    if (!Spotify.token) html += `<div class="r-foot">Connect Spotify to search every song.</div>`;
     box.innerHTML = html; box.hidden = false; $('#q').setAttribute('aria-expanded', 'true');
   },
   move(d){
@@ -1667,8 +1682,8 @@ function drawHint(){
   const base = state.floor - 30 + (1 - hintA) * 6;
   cx.save(); cx.textAlign = 'center'; cx.globalAlpha = hintA;
   cx.font = '400 11.5px Poppins, system-ui, sans-serif'; cx.fillStyle = T.faint;
-  const sub = 'The Sound Core below releases a new one every few seconds', two = cx.measureText(sub).width > CW() - 32;
-  if (two){ cx.fillText('The Sound Core below releases', W / 2, base - 15); cx.fillText('a new one every few seconds', W / 2, base); } else cx.fillText(sub, W / 2, base);
+  const sub = 'New bubbles rise from the core', two = cx.measureText(sub).width > CW() - 32;
+  if (two){ cx.fillText(sub, W / 2, base); } else cx.fillText(sub, W / 2, base);
   cx.font = '500 13px Poppins, system-ui, sans-serif'; cx.fillStyle = T.muted;
   cx.fillText(Party.role === 'guest' ? 'Tap a bubble to add it to the queue' : 'Tap a bubble to listen', W / 2, base - (two ? 15 : 0) - 19);
   cx.restore();
@@ -1847,9 +1862,9 @@ const UI = {
   },
   note(){
     const m = Player.mode;
-    $('#pNote').textContent = m === 'app' ? 'Playing in your Spotify app, full song. Keep Spotify open on this phone.' : m === 'embed' ? 'Playing from Spotify. Signed out, you hear a 30-second preview. Signed in to Spotify in this browser, press play inside the Spotify player for the full song.'
-      : m === 'preview' ? "Playing Spotify's 30-second preview clip."
-      : "A synth sketch in this track's genre and tempo. The open icon on each song in your library takes you to the real track on Spotify.";
+    $('#pNote').textContent = m === 'app' ? 'Full song in your Spotify app.' : m === 'embed' ? '30-second preview. Connect Spotify for full songs.'
+      : m === 'preview' ? '30-second preview.'
+      : 'A synth sketch of this song.';
     dock.classList.toggle('src-spotify', state.source === 'spotify' && !Embed.failed);
   },
   progress(){
@@ -1908,7 +1923,7 @@ function renderHistory(){
       <div class="h-acts">
         <button class="h-like" aria-pressed="${on}" title="${on ? 'Remove from saved' : 'Save song'}" aria-label="${on ? 'Remove' : 'Save'} ${esc(h.title)}">${ICON_HEART}</button>
         <span class="h-replay" title="Release a replay bubble">${ICON_REPLAY}</span>
-        <a class="h-ext" href="${esc(h.url)}" target="_blank" rel="noopener" title="Open in Spotify" aria-label="Open ${esc(h.title)} in Spotify">${ICON_EXT}</a>
+
       </div>
     </div>`; }).join('');
 }
@@ -2258,7 +2273,7 @@ const Qzone = {
   hit(x, y){ if (!this.on || !this.el) return false; const r = this.el.getBoundingClientRect(); return x >= r.left - 16 && y >= r.top - 40 && y <= r.bottom + 40; },
   hide(delay){ if (!this.el) return; this.on = false; clearTimeout(this.t); this.t = setTimeout(() => { this.el.classList.remove('show', 'over'); $('#qhint').classList.remove('away'); }, delay || 0); },
   // the resting icon sits mid-height in the bubble area and shows how many songs are queued
-  placeHint(){ const h = $('#qhint'), top = topLimit() + 8; h.style.top = (top + (state.floor - top - 16) / 2 - 20) + 'px'; h.dataset.count = state.queue.length || ''; }
+  placeHint(){ const h = $('#qhint'); h.dataset.count = state.queue.length || ''; }
 };
 function queueBubble(b){
   const r = $('#qzone').getBoundingClientRect();
@@ -2299,12 +2314,12 @@ function renderPartySheet(){
   const n = d.songs.length, since = new Date(d.started).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
   if (d.role === 'host'){
     const url = Party.joinUrl(d.code);
-    body.innerHTML = `<p class="lead">Friends scan this or type the code to add songs. They don't need Spotify.</p>
+    body.innerHTML = `<p class="lead">Friends scan or type the code. No Spotify needed.</p>
       <div class="qr" id="psQr"></div><div class="code-big">${esc(d.code)}</div>
       <div class="copy-row"><input id="psLink" readonly value="${esc(url)}" aria-label="Party link"><button class="btn" data-copy="#psLink">Copy link</button></div>
       <div class="ps-set">
-        <label class="switch"><span class="sw-text"><b>Guests can skip songs</b><span>Off means guests can only add to the queue.</span></span><input type="checkbox" data-set="allowSkip"${d.allowSkip ? ' checked' : ''}></label>
-        <label class="switch"><span class="sw-text"><b>Hide explicit songs</b><span>Uses Spotify's explicit tag. Handy for family parties.</span></span><input type="checkbox" data-set="noExplicit"${d.noExplicit ? ' checked' : ''}></label>
+        <label class="switch"><span class="sw-text"><b>Guests can skip songs</b><span>Otherwise they can only add</span></span><input type="checkbox" data-set="allowSkip"${d.allowSkip ? ' checked' : ''}></label>
+        <label class="switch"><span class="sw-text"><b>Hide explicit songs</b><span>Good for family parties</span></span><input type="checkbox" data-set="noExplicit"${d.noExplicit ? ' checked' : ''}></label>
       </div>
       <div class="sheet-foot"><span class="ps-meta">${n} song${n === 1 ? '' : 's'} played · started ${since}</span><button class="btn" id="psEnd">End party</button></div>`;
     drawQR($('#psQr'), url);
@@ -2380,7 +2395,7 @@ const Entry = {
   renderSpot(){
     const p = profileInfo(); $('#hostSpot').classList.toggle('on', p.connected);
     $('#hostSpotName').textContent = p.connected ? (p.cc ? 'Spotify search connected' : `Connected as ${p.name}`) : 'Spotify not connected';
-    $('#hostSpotSub').textContent = p.connected ? (p.cc ? 'Bubbles come from Spotify searches' : 'Bubbles come from your top tracks and liked songs') : `Optional. Without it you get the ${MOCK.length}‑song party library.`;
+    $('#hostSpotSub').textContent = p.connected ? (p.cc ? 'Bubbles come from Spotify searches' : 'Your top and liked songs') : 'Optional';
     $('#hostConnect').textContent = p.connected ? 'Change' : 'Connect';
   },
   renderLive(){ const d = Party.data; if (!d) return; const url = Party.joinUrl(d.code); $('#liveCode').textContent = d.code; $('#liveLink').value = url; drawQR($('#liveQr'), url); }
@@ -2433,7 +2448,7 @@ function setupParty(){
     else if (k === 'disconnect') Spotify.disconnect();
   });
   $('#likeBtn').addEventListener('click', () => Saved.toggle(Player.track));
-  $('#qhint').addEventListener('click', () => { setOpen(true); if (!state.queue.length) toast('Drag a bubble here to add it to the queue'); });
+  $('#qhint').addEventListener('click', () => { setOpen(true); if (!state.queue.length) toast('Drag a bubble here to queue it'); });
 
   const ps = $('#partySheet');
   ps.addEventListener('change', e => {
@@ -2469,28 +2484,33 @@ const Dev = {
   async open(){
     openModal('devSheet');
     if (!this.wired){ this.wired = true; $('#devBody').addEventListener('click', e => { const r = e.target.closest('[data-dev]'); if (r) this.pick(r.dataset.dev, r.dataset.name); }); }
-    if (!this.vis){ this.vis = true; document.addEventListener('visibilitychange', () => { if (!document.hidden && $('#devSheet').classList.contains('open')) setTimeout(() => this.load(), 900); }); }
+    if (!this.vis){ this.vis = true; document.addEventListener('visibilitychange', () => { if (!document.hidden && $('#devSheet').classList.contains('open')) [900, 2500, 5000].forEach(ms => setTimeout(() => this.load(), ms)); }); }
     this.load();
   },
   help(b, hasPhone){
     const box = document.createElement('div'); box.className = 'dev-help';
-    const p = document.createElement('p'); p.textContent = hasPhone ? 'Not seeing the right device? Open Spotify on it, then refresh.' : "Don't see this phone? Spotify only lists it while the Spotify app is open. Open it, play any song for a second, then come back here.";
+    const p = document.createElement('p'); p.textContent = hasPhone ? 'Missing a device? Open Spotify on it, then refresh.' : 'Phone not listed? Open Spotify, play a song, come back.';
     const row = document.createElement('div'); row.className = 'dev-actions';
     const open = document.createElement('a'); open.className = 'btn primary'; open.textContent = 'Open Spotify app'; open.href = Player.track ? 'spotify:track:' + Player.track.id : 'spotify:';
     const ref = document.createElement('button'); ref.className = 'btn'; ref.textContent = 'Refresh'; ref.addEventListener('click', () => this.load());
     row.appendChild(open); row.appendChild(ref); box.appendChild(p); box.appendChild(row); b.appendChild(box);
   },
   async load(){
-    this.msg('Looking for your devices…');
+    this.msg('Finding devices…');
     try {
       const list = await Remote.devices(), b = $('#devBody'); b.innerHTML = '';
       const hasPhone = list.some(d => /smartphone|tablet/i.test(d.type));
+      if (IS_PHONE && !hasPhone){ const r = document.createElement('button'); r.className = 'r-item'; r.dataset.dev = '__phone'; r.dataset.name = 'This phone';
+        const m = document.createElement('div'); m.className = 'h-meta'; const a = document.createElement('b'); a.textContent = 'This phone'; const sp = document.createElement('span'); sp.textContent = 'Plays in the Spotify app'; m.appendChild(a); m.appendChild(sp); r.appendChild(m); b.appendChild(r); }
+      const ph = list.find(d => /smartphone|tablet/i.test(d.type)); if (this.wantPhone && ph){ this.pick(ph.id, ph.name); return; }
       list.forEach(d => { const r = document.createElement('button'); r.className = 'r-item' + (d.id === Remote.dev ? ' on' : ''); r.dataset.dev = d.id; r.dataset.name = d.name;
         const m = document.createElement('div'); m.className = 'h-meta'; const a = document.createElement('b'); a.textContent = d.name; const s = document.createElement('span'); s.textContent = d.type + (d.is_active ? ' · active now' : ''); m.appendChild(a); m.appendChild(s); r.appendChild(m); b.appendChild(r); });
       this.help(b, hasPhone);
-    } catch(e){ this.msg(e.status === 403 || e.status === 401 ? 'Spotify needs you to connect again. Use Connect Spotify first.' : "Couldn't load your devices. Check your connection."); }
+    } catch(e){ this.msg(e.status === 403 || e.status === 401 ? 'Connect Spotify first.' : "Couldn't load devices."); }
   },
   pick(id, name){
+    if (id === '__phone'){ this.wantPhone = true; toast('Play any song in Spotify, then come back'); location.href = Player.track ? 'spotify:track:' + Player.track.id : 'spotify:'; return; }
+    this.wantPhone = false;
     Remote.dev = id; Remote.devName = name; store.set('bb.dev2', id); store.set('bb.devn2', name); closeModal($('#devSheet')); syncDevice(); toast('Playing on ' + name);
     if (Player.track && Player.mode === 'app') Remote.play(Player.track);
   }
@@ -2505,7 +2525,7 @@ const PL = {
   async open(){
     openModal('plSheet'); $('#plSheet')._onClose = () => syncTabs(); syncTabs();
     if (!this.wired){ this.wired = true; $('#plBody').addEventListener('click', e => { const r = e.target.closest('[data-pl]'); if (r) this.pick(r.dataset.pl, r.dataset.name); }); }
-    if (!this.connected()) return this.msg('Connect Spotify to use your own playlists.', 'Connect Spotify');
+    if (!this.connected()) return this.msg('Connect Spotify to see your playlists.', 'Connect Spotify');
     this.msg('Loading your playlists…');
     try {
       const me = Spotify.me || await Spotify.api('/me').catch(() => null); let items = [];
@@ -2519,8 +2539,8 @@ const PL = {
       items.filter(Boolean).forEach(p => { const total = (p.items && p.items.total != null) ? p.items.total : (p.tracks && p.tracks.total) || 0; const mine = !me || !p.owner || p.owner.id === me.id || p.collaborative;
         mk(p.id, p.name || 'Untitled', total + ' songs' + (mine ? '' : ' · not yours'), (p.images && p.images[p.images.length - 1] || {}).url, state.plName === p.name); });
     } catch(e){
-      if (e.status === 403 || e.status === 401) this.msg('Spotify needs your OK to read playlists. Tap below and agree once.', 'Allow playlists');
-      else this.msg("Couldn't load your playlists. Check your connection and try again.");
+      if (e.status === 403 || e.status === 401) this.msg('Allow playlist access once.', 'Allow playlists');
+      else this.msg("Couldn't load playlists.");
     }
   },
   async pick(id, name){
@@ -2528,8 +2548,8 @@ const PL = {
     try {
       if (id === '__all'){ await Spotify.loadAll(); }
       else { const n = await Spotify.loadPlaylist(id, name);
-        if (!n) toast("Spotify only lets this app read playlists you own or collaborate on, or that playlist is empty."); else toast(name + ' is in the bubbles. ' + n + ' songs.'); }
-    } catch(e){ toast(e.status === 403 ? 'Spotify blocked that playlist. Only your own playlists can be read.' : "Couldn't load that playlist."); }
+        if (!n) toast('Only your own playlists can load.'); else toast(name + ' is in the bubbles. ' + n + ' songs.'); }
+    } catch(e){ toast(e.status === 403 ? 'Only your own playlists can load.' : "Couldn't load that playlist."); }
     this.busy = false;
   }
 };
@@ -2554,6 +2574,7 @@ function setupPhone(){
   });
   $('#ssClose').addEventListener('click', closeSearch);
   $('#mPlay').addEventListener('click', () => Player.toggle());
+  $('#fabClear').addEventListener('click', () => clearScreen());
   const goConnect = () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message));
   $('#hdrConnect').addEventListener('click', () => $('#hdrConnect').dataset.mode === 'pl' ? PL.open() : goConnect()); $('#npConnect').addEventListener('click', goConnect); $('#npDevice').addEventListener('click', () => Dev.open()); syncConnect();
   $('#mLike').addEventListener('click', () => Saved.toggle(Player.track));
@@ -2563,7 +2584,7 @@ function setupPhone(){
 async function bootSpotify(){
   try { if (await Spotify.handleRedirect()){ await Spotify.loadAll(); return; }
     if (Spotify.restore() && await Spotify.ensure()) await Spotify.loadAll(); }
-  catch(err){ if (!(Spotify.kind === 'pkce' && Spotify.token)) Spotify.token = null; else toast('Connected to Spotify, but no songs came back. Pick a playlist with the Playlists button.'); }
+  catch(err){ if (!(Spotify.kind === 'pkce' && Spotify.token)) Spotify.token = null; else toast('Connected. Pick a playlist to start.'); }
   updateStatus();
 }
 buildChips(); setup(); setupParty(); setupPhone(); resize(); renderHistory(); applyMode(); updateStatus(); updateSoundBtn(); updateNav();
