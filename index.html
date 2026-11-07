@@ -1667,8 +1667,8 @@ function popBubble(b, auto, force){
   if (Party.role === 'guest' && !force && Player.track && !Player.isPaused()){
     queueTrack(b.track, b.why);
   } else playNow(b.track, b.why || whyOf(b.track));
-  if (!auto && !store.get('bb.dragTip', false)){ store.set('bb.dragTip', true); setTimeout(() => toast('Tip: drag a bubble to the right edge to queue it, or flick it away to skip.'), 2600); }
-  if (Embed.failed && !state.toldNoSpotify){ state.toldNoSpotify = true; toast("Spotify can't play inside this preview, so this is a sketch. Open the page in your browser for the real songs."); }
+  if (!auto && !store.get('bb.dragTip', false)){ store.set('bb.dragTip', true); setTimeout(() => toast('Tip: drag a bubble to queue it, flick to skip'), 2600); }
+  if (Embed.failed && !state.toldNoSpotify){ state.toldNoSpotify = true; toast('Playing a sketch. Real songs need your browser.'); }
   setTimeout(soundCheck, 900);
   state.hintOut = true;
   state.autoNext = performance.now() + AUTO_MS; state.autoTarget = null;
@@ -2013,6 +2013,7 @@ function unlockAudio(){
 function soundOn(){ return !!(A.ctx && A.ctx.state === 'running'); }
 function updateSoundBtn(){}
 function soundCheck(){
+  if (appAudioOff()) return;
   if (!A.ctx){ toast('Your browser has no Web Audio support.'); return; }
   updateSoundBtn();
   if (A.ctx.state !== 'running') toast('Sound is blocked by the browser. Tap anywhere once to turn it on.');
