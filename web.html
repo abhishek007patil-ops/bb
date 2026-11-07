@@ -1,0 +1,2288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bubble Beats</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: dark canvas of white glass bubbles; a full-width Spotify-style player bar at the bottom with the Sound Core at its centre and an expandable panel above it; library + Spotify icons top right. Single dark look, violet is the only accent. */
+:root{
+  --bg:#0d0b12; --surface:#15121d; --surface2:#1b1825; --raise:rgba(255,255,255,.06); --raise2:rgba(255,255,255,.1);
+  --ink:#f3f1f8; --muted:#a19cb3; --faint:#6b6680;
+  --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.16);
+  --accent:#b0258a; --accent-press:#9a2079; --g1:#7f1aba; --g2:#a8218f; --g3:#d02f4a; --grad:linear-gradient(45deg,var(--g1) 0%,var(--g2) 52%,var(--g3) 100%); --accent-hi:#ec6a9c; --accent-soft:rgba(176,37,138,.18);
+  --shadow:rgba(0,0,0,.5); --scrim:rgba(5,4,9,.62);
+  --font:'Poppins',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --gl:max(16px, env(safe-area-inset-left, 0px));
+  --gr:max(16px, env(safe-area-inset-right, 0px));
+  --gt:calc(14px + env(safe-area-inset-top, 0px));
+  --gb:calc(16px + env(safe-area-inset-bottom, 0px));
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased;
+  padding-left:var(--gl);padding-right:var(--gr);padding-block:0}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;padding:0}
+button:focus-visible,a:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.icon-btn{position:relative;width:40px;height:40px;display:grid;place-items:center;color:var(--ink);flex:none;transition:color .2s,transform .15s}
+.icon-btn:hover{color:var(--accent-hi)}
+.icon-btn:active{transform:scale(.92)}
+.icon-btn.on{color:var(--accent-hi)}
+.icon-btn svg{width:24px;height:24px}
+
+/* Top */
+.top{position:fixed;top:var(--gt);left:var(--gl);right:var(--gr);display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-areas:"brand search actions";align-items:center;gap:12px;z-index:40;pointer-events:none}
+.top > *{pointer-events:auto}
+.brand{grid-area:brand;display:flex;align-items:center;gap:10px;min-width:0}
+.brand-orb{width:28px;height:28px;border-radius:50%;flex:none;background:radial-gradient(circle at 34% 30%,#fff 0 8%,#f4a3cb 30%,#b0258a 64%,#5a1480 100%);box-shadow:0 0 18px rgba(176,37,138,.45)}
+.brand b{display:block;font-weight:600;font-size:18px;letter-spacing:-.01em;line-height:1.1}
+.brand small{display:block;font-size:11.5px;color:var(--muted)}
+.brand .by{font-size:11px;font-weight:400;letter-spacing:0;color:var(--muted);margin-left:7px;white-space:nowrap}
+.top-actions{grid-area:actions;display:flex;align-items:center;justify-content:flex-end;gap:4px}
+.search{grid-area:search;position:relative;width:min(440px, 36vw)}
+.search-box{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px 0 12px;border:1px solid var(--line2);border-radius:10px;background:rgba(13,11,18,.55);transition:border-color .2s,background .2s}
+.search-box:hover{border-color:rgba(255,255,255,.26)}
+.search-box:focus-within{border-color:rgba(255,255,255,.42);background:rgba(13,11,18,.85)}
+.search-box > svg{width:20px;height:20px;color:var(--muted);flex:none}
+.search-box input{flex:1;min-width:0;height:100%;border:none;outline:none;background:transparent;font-size:13.5px;color:var(--ink)}
+.search-box input::placeholder{color:var(--faint)}
+.search-box input::-webkit-search-cancel-button{display:none}
+.search-box kbd{font:inherit;font-size:11px;color:var(--faint);border:1px solid var(--line2);border-radius:5px;padding:1px 6px}
+.search-box .clear-q{width:24px;height:24px;display:none;place-items:center;color:var(--muted)}
+.search-box .clear-q svg{width:18px;height:18px}
+.search.has-q .clear-q{display:grid}
+.search.has-q kbd,.search-box:focus-within kbd{display:none}
+.results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--line2);border-radius:12px;padding:6px;box-shadow:0 20px 50px var(--shadow);max-height:min(460px, 64vh);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.results[hidden]{display:none}
+.r-item{display:flex;align-items:center;gap:12px;width:100%;padding:7px 8px;border-radius:8px;text-align:left;transition:background .15s}
+.r-item:hover,.r-item.active{background:var(--raise)}
+.r-item img{width:40px;height:40px;border-radius:5px;object-fit:cover;flex:none;background:var(--raise)}
+.r-item .h-meta b{font-size:13.5px}
+.r-item .r-tag{font-size:11px;color:var(--faint);white-space:nowrap}
+.r-head{padding:6px 8px 4px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:500}
+.r-empty,.r-foot{padding:10px 8px;font-size:12px;line-height:1.5;color:var(--faint)}
+.r-foot{border-top:1px solid var(--line);margin-top:4px}
+.sound-btn{display:flex;align-items:center;gap:6px;height:40px;padding:0 8px;font-size:12px;font-weight:500;color:var(--accent-hi);white-space:nowrap}
+.sound-btn svg{width:24px;height:24px;flex:none}
+.sound-btn .wave{display:none}
+.sound-btn.on{color:var(--ink)}
+.sound-btn.on .wave{display:inline}
+.sound-btn.on .mute{display:none}
+.sound-btn.on span{display:none}
+.sound-btn:hover{color:var(--accent-hi)}
+
+/* Chips */
+.chips{position:fixed;top:calc(var(--gt) + 54px);left:calc(var(--gl) - 6px);right:var(--gr);margin-inline:0;width:auto;display:flex;gap:6px;z-index:20;max-width:calc(100% - 32px);overflow-x:auto;padding:6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:500;color:var(--muted);background:var(--raise);border:1px solid var(--line);transition:color .25s,background .25s,border-color .25s}
+.chip:hover{color:var(--ink)}
+.chip.on{color:#fff;background:var(--accent);border-color:var(--accent)}
+
+/* Dock: expandable panel + full-width player bar */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:22}
+.panel-wrap{position:fixed;top:calc(var(--gt) + 56px);right:var(--gr);bottom:calc(var(--dock-h, 96px) + 16px);width:380px;transform:translateX(calc(100% + 40px));visibility:hidden;
+  transition:transform .45s cubic-bezier(.2,.8,.2,1),visibility 0s linear .45s}
+.dock.open .panel-wrap{transform:none;visibility:visible;transition:transform .45s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.panel{position:relative;height:100%;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 50px var(--shadow);scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.panel-inner{padding:18px 18px 22px;display:grid;grid-template-columns:minmax(0,1fr);gap:24px;align-items:start}
+.p-close{position:absolute;top:6px;right:6px;z-index:1}
+.qzone,.qhint{margin-right:var(--qr, 0px)}
+.pcol{display:flex;flex-direction:column;gap:14px;min-width:0}
+.p-label{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:500}
+#spectrum{width:100%;height:64px;display:block}
+.embed{border-radius:12px;overflow:hidden;height:0;margin-top:-14px;transition:height .35s}
+.dock.src-spotify:not(.idle) .embed{height:80px;margin-top:0}
+.embed iframe{display:block;border:0}
+.embed.needs-tap{box-shadow:0 0 0 3px var(--accent);animation:tapPulse 1.6s ease-in-out infinite}
+@keyframes tapPulse{50%{box-shadow:0 0 0 6px rgba(176,37,138,.35)}}
+.p-note{margin:0;font-size:12px;line-height:1.5;color:var(--faint)}
+.p-note.tap{color:var(--ink);font-weight:500}
+.dock.idle .vis,.dock.idle .p-note{display:none}
+.ctrl label{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:var(--muted);margin-bottom:8px}
+.ctrl label svg{width:24px;height:24px;color:var(--ink)}
+.ctrl output{margin-left:auto;font-size:11.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+.seg{display:flex;padding:3px;border-radius:10px;background:var(--raise);font-size:12px;font-weight:500}
+.seg button{flex:1;padding:7px 10px;border-radius:7px;color:var(--muted);transition:color .2s,background .2s}
+.seg button.on{background:var(--raise2);color:var(--ink)}
+.seg button[disabled]{opacity:.4;cursor:not-allowed}
+#toolsSlot:empty{display:none}
+
+.bar{position:relative;background:var(--surface2);border-top:1px solid var(--line);
+  padding:40px max(20px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+  display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-areas:"np center right";align-items:center;gap:24px}
+.edge{position:absolute;left:0;right:0;top:-1px;height:2px;background:var(--line2);display:none}
+.edge span{display:block;height:100%;width:0;background:var(--accent)}
+.np{grid-area:np;display:flex;align-items:center;gap:14px;min-width:0}
+.p-cover{width:56px;height:56px;border-radius:6px;overflow:hidden;flex:none;background:var(--raise);position:relative}
+.p-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.p-cover .orb{position:absolute;inset:10px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#fff 0 8%,#f4a3cb 30%,#b0258a 64%,#5a1480 100%)}
+.dock:not(.idle) .p-cover .orb{display:none}
+.dock.idle .p-cover img{display:none}
+.p-meta{min-width:0}
+.p-meta h3{font-weight:600;font-size:14.5px;line-height:1.3;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-meta p{margin:0;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl{position:relative;width:36px;height:36px;display:grid;place-items:center;color:var(--muted);flex:none;text-decoration:none;transition:color .2s,transform .15s}
+.ctl:hover{color:var(--ink)}
+.ctl:active{transform:scale(.9)}
+.ctl svg{width:24px;height:24px}
+.ctl[disabled]{opacity:.35;pointer-events:none}
+.ctl[aria-pressed=true]{color:var(--accent-hi)}
+.ctl[aria-pressed=true]::after{content:"";position:absolute;bottom:1px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--accent-hi)}
+.ctl.chev .pane{fill:currentColor;stroke:none;opacity:0;transition:opacity .2s}
+.dock.open .ctl.chev{color:var(--accent-hi)}
+.dock.open .ctl.chev .pane{opacity:1}
+.center{grid-area:center;display:flex;flex-direction:column;align-items:center;gap:10px;width:min(600px, 40vw)}
+.transport{display:flex;align-items:center;justify-content:center;gap:18px;height:44px}
+.play{width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;flex:none;margin:0 4px;transition:transform .15s,background .2s}
+.play:hover{transform:scale(1.06);background:#fff}
+.play:active{transform:scale(.95)}
+.play svg{width:22px;height:22px}
+.core{position:absolute;left:50%;top:0;width:76px;height:76px;display:grid;place-items:center;transform:translate(-50%,-64%);z-index:2}
+.hump{position:absolute;left:-44.74%;top:-5.26%;width:189.47%;height:73.68%;overflow:visible;pointer-events:none}
+.hump .hf{fill:var(--surface2)}
+.hump .hs{fill:none;stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.core .orb{position:relative;width:56px;height:56px;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#fff 0 8%,#f4a3cb 30%,#b0258a 64%,#5a1480 100%);
+  box-shadow:0 0 calc(22px + var(--e,0) * 170px) rgba(176,37,138,.7),0 0 0 1px rgba(255,255,255,.18) inset,0 0 0 7px var(--surface2);transform:scale(calc(1 + var(--e,0)));transition:transform .08s linear}
+.core .orb::before,.core .orb::after{content:"";position:absolute;inset:0;border-radius:50%;border:1px solid rgba(236,106,156,.7);animation:ripple 3.2s ease-out infinite;pointer-events:none}
+.core .orb::after{animation-delay:1.6s}
+@keyframes ripple{from{transform:scale(1);opacity:.8}to{transform:scale(2.2);opacity:0}}
+.charge{position:absolute;left:-10px;top:-10px;width:76px;height:76px;transform:rotate(-90deg);overflow:visible;pointer-events:none}
+.charge circle{fill:none;stroke:var(--accent-hi);stroke-width:2;stroke-linecap:round;stroke-dasharray:226.2;stroke-dashoffset:226.2}
+.core:hover .orb{filter:brightness(1.15)}
+.core:active .orb{transform:scale(.9)}
+.progress{display:flex;align-items:center;gap:10px;width:100%;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.progress time{min-width:34px}
+.progress time:first-child{text-align:right}
+.track-bar{position:relative;flex:1;height:4px;border-radius:2px;background:var(--line2);cursor:pointer;touch-action:none}
+.track-bar::before{content:"";position:absolute;left:0;right:0;top:-7px;bottom:-7px}
+.track-bar span{position:relative;display:block;height:100%;width:0;border-radius:2px;background:var(--ink)}
+.track-bar span::after{content:"";position:absolute;right:-6px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.5);opacity:0;transition:opacity .15s}
+.track-bar:hover span,.track-bar.drag span{background:var(--accent-hi)}
+.track-bar:hover span::after,.track-bar.drag span::after{opacity:1}
+.dock.idle .progress{visibility:hidden}
+.right{grid-area:right;display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0}
+.tools{display:flex;align-items:center;gap:6px}
+.vol{display:flex;align-items:center;gap:4px}
+.vol input{width:110px;--fill:var(--ink)}
+.vol input:hover{--fill:var(--accent-hi)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;outline-offset:6px;cursor:pointer;
+  background:linear-gradient(90deg,var(--fill,var(--accent)) 0 var(--p,50%),var(--line2) var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.5);transition:opacity .15s}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-radius:50%;background:#fff}
+.vol input::-webkit-slider-thumb{opacity:0}
+.vol input:hover::-webkit-slider-thumb,.vol input:focus-visible::-webkit-slider-thumb{opacity:1}
+#toolsSlot .vol input::-webkit-slider-thumb{opacity:1}
+.mute .x{display:none}
+.mute.muted .x{display:inline}
+.mute.muted .wave{display:none}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 12px;border-radius:10px;background:var(--raise);font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap;transition:background .2s}
+.btn:hover{background:var(--raise2)}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-press)}
+.btn[disabled]{opacity:.4;pointer-events:none}
+
+/* Library */
+.history{position:fixed;top:calc(var(--gt) + 50px);right:var(--gr);bottom:calc(var(--dock-h, 96px) + 16px);width:380px;z-index:35;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 50px var(--shadow);
+  transform:translateX(calc(100% + 40px));transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+.history.open{transform:none}
+.h-head{padding:16px 10px 10px 18px;display:flex;align-items:center;gap:6px}
+.h-head h2{font-weight:600;font-size:18px;margin:0;flex:1;line-height:1.2}
+.h-head h2 small{display:block;font-size:11.5px;font-weight:400;color:var(--muted);margin-top:2px}
+.h-sub{padding:4px 18px 6px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:500}
+.h-list{flex:1;overflow-y:auto;padding:0 8px 8px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.h-item{display:flex;gap:12px;align-items:center;padding:8px;border-radius:10px;cursor:pointer;transition:background .2s}
+.h-item:hover{background:var(--raise)}
+.h-item img{width:44px;height:44px;border-radius:6px;object-fit:cover;flex:none;background:var(--raise)}
+.h-meta{flex:1;min-width:0}
+.h-meta b{display:block;font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-meta span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-meta em{display:block;font-style:normal;font-size:11px;color:var(--faint);margin-top:1px}
+.h-acts{display:flex}
+.h-acts > *{width:36px;height:36px;display:grid;place-items:center;color:var(--muted);transition:color .2s}
+.h-acts > *:hover{color:var(--ink)}
+.h-acts svg{width:24px;height:24px}
+.h-empty{padding:48px 24px;text-align:center;color:var(--faint);font-size:13px;line-height:1.6}
+.h-empty svg{width:40px;height:40px;color:var(--faint);margin-bottom:8px}
+.h-empty b{display:block;font-weight:500;color:var(--muted)}
+
+/* Modal */
+.modal{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:var(--scrim);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .3s}
+.modal.open{opacity:1;pointer-events:auto}
+.sheet{width:min(500px,100%);max-height:calc(100% - 32px);overflow:auto;padding:22px;background:var(--surface);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 50px var(--shadow);transform:translateY(10px);transition:transform .35s ease}
+.modal.open .sheet{transform:none}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sheet-head h2{font-weight:600;font-size:20px;margin:0}
+.lead{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 16px}
+.field{margin-bottom:14px}
+.field label{display:flex;justify-content:space-between;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:6px}
+.field label span{font-weight:400;color:var(--faint)}
+.field input{width:100%;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line2);font-size:13px}
+.field input[readonly]{color:var(--muted);font-size:11.5px}
+.copy-row{display:flex;gap:8px}
+.copy-row input{flex:1;min-width:0;padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--line2);font-size:12px;color:var(--muted)}
+.adv{margin:14px 0;padding:11px 13px;border-radius:12px;background:var(--raise)}
+.adv summary{cursor:pointer;font-size:12.5px;font-weight:500;color:var(--muted)}
+.adv[open] summary{margin-bottom:12px}
+.small{font-size:11.5px;line-height:1.5;color:var(--faint);margin:-4px 0 12px}
+.note{font-size:12px;color:var(--muted);line-height:1.6;padding:12px 14px;border-radius:12px;background:var(--raise);margin-top:14px}
+.note p{margin:0 0 4px}
+.note ol{padding-left:18px;margin:4px 0 8px}
+.sandbox-note{padding:10px 12px;margin:0 0 16px;font-size:12px;line-height:1.55;color:var(--ink);background:var(--accent-soft);border-radius:12px}
+.sheet-foot{display:flex;align-items:center;gap:8px;margin-top:16px;flex-wrap:wrap}
+#connState{flex:1;font-size:12px;color:var(--faint);min-width:140px}
+
+[hidden]{display:none!important}
+
+/* Brand doubles as home / party button */
+.brand{justify-self:start;text-align:left;border-radius:10px;padding:2px 8px 2px 0;max-width:100%}
+.brand > div{min-width:0}
+.brand small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top.in-party .brand small{display:block;color:var(--muted);font-weight:400}
+.live{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent-hi);margin-right:7px;vertical-align:1px;animation:livePulse 2s ease-in-out infinite}
+@keyframes livePulse{50%{opacity:.35}}
+
+/* Profile */
+.avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:var(--accent);color:#fff;font-size:12px;font-weight:600;flex:none}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.avatar.ghost{background:var(--raise2);color:var(--ink)}
+.avatar.ghost svg{width:24px;height:24px}
+.avatar.lg{width:44px;height:44px;font-size:15px}
+.icon-btn .dot{position:absolute;top:7px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--accent-hi);box-shadow:0 0 0 2px var(--bg)}
+.pop{position:fixed;z-index:50;background:var(--surface);border:1px solid var(--line2);border-radius:14px;box-shadow:0 20px 50px var(--shadow);padding:8px;opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .2s,transform .2s}
+.pop.open{opacity:1;transform:none;pointer-events:auto}
+.profile-menu{top:calc(var(--gt) + 48px);right:var(--gr);width:min(300px, calc(100% - 32px))}
+.pm-head{display:flex;gap:12px;align-items:center;padding:10px 10px 12px}
+.pm-who{min-width:0}
+.pm-who b{display:block;font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-who span{display:block;font-size:12px;color:var(--muted)}
+.pm-cta{display:flex;width:calc(100% - 16px);margin:0 8px 8px;padding:10px}
+.pm-item{display:flex;align-items:center;gap:12px;width:100%;padding:8px 10px;border-radius:9px;font-size:13px;text-align:left;color:var(--ink);transition:background .15s}
+.pm-item:hover{background:var(--raise)}
+.pm-item svg{width:24px;height:24px;color:var(--muted);flex:none}
+.pm-item em{margin-left:auto;font-style:normal;font-size:12px;color:var(--faint)}
+.pm-item.quiet{color:var(--muted)}
+.pm-sep{height:1px;background:var(--line);margin:6px 4px}
+
+/* Player additions */
+.like::after{display:none!important}
+.like[aria-pressed=true]{color:var(--accent-hi)}
+.like[aria-pressed=true] path{fill:currentColor}
+.dock.idle .like{display:none}
+.p-why{display:block;margin:1px 0 0;font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock.idle .p-why{display:none}
+.ctl.on{color:var(--accent-hi)}
+.device-pop{bottom:calc(var(--dock-h, 96px) + 12px);right:var(--gr);width:min(300px, calc(100% - 32px));padding:14px;transform:translateY(6px)}
+.pop h4{margin:2px 2px 10px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:500}
+.pop p{margin:10px 2px 0;font-size:12px;line-height:1.55;color:var(--muted)}
+.dp-row{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;background:var(--raise)}
+.dp-row svg{width:24px;height:24px;color:var(--accent-hi);flex:none}
+.dp-row b{display:block;font-size:13.5px;font-weight:500}
+.dp-row span{display:block;font-size:12px;color:var(--muted)}
+.upnext{display:flex;flex-direction:column;gap:2px;margin:-4px -6px 0}
+.un-item{display:flex;align-items:center;gap:10px;padding:5px 6px;border-radius:8px}
+.un-item img{width:36px;height:36px;border-radius:5px;object-fit:cover;flex:none;background:var(--raise)}
+.un-item .h-meta b{font-size:13px}
+.un-tag{font-size:10.5px;color:var(--faint);white-space:nowrap}
+.un-tag.req{color:var(--accent-hi)}
+.un-empty{margin:0;font-size:12px;color:var(--faint);line-height:1.5}
+.core .tip{position:absolute;bottom:calc(100% + 16px);left:50%;transform:translate(-50%,4px);padding:5px 10px;border-radius:8px;background:var(--surface2);border:1px solid var(--line2);font-size:12px;font-weight:500;white-space:nowrap;color:var(--ink);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+.core .tip kbd{font:inherit;font-size:11px;color:var(--faint);border:1px solid var(--line2);border-radius:4px;padding:0 5px;margin-left:6px}
+@media (hover:hover){ .core:hover .tip,.core:focus-visible .tip{opacity:1;transform:translate(-50%,0)} }
+
+/* Library tabs + party rows */
+.h-tabs{margin:0 14px 8px}
+.h-like[aria-pressed=true]{color:var(--accent-hi)}
+.h-like[aria-pressed=true] path{fill:currentColor}
+.p-thumb{width:44px;height:44px;border-radius:6px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;flex:none;background:var(--raise)}
+.h-item .p-thumb img{width:22px;height:22px;border-radius:0}
+
+/* Switch */
+.switch{display:flex;align-items:center;gap:12px;padding:11px 0;cursor:pointer}
+.switch + .switch{border-top:1px solid var(--line)}
+.sw-text{flex:1;min-width:0}
+.sw-text b{display:block;font-size:13px;font-weight:500}
+.sw-text span{display:block;font-size:11.5px;color:var(--faint);line-height:1.45;margin-top:1px}
+.switch input{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:999px;background:var(--line2);position:relative;cursor:pointer;flex:none;margin:0;transition:background .2s}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+.switch input:checked{background:var(--accent)}
+.switch input:checked::after{transform:translateX(16px)}
+
+/* Entry */
+.entry{position:fixed;inset:0;z-index:55;display:grid;place-items:center;padding:24px var(--gr) 24px var(--gl);background:rgba(9,7,14,.6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;pointer-events:none;transition:opacity .35s}
+.entry.open{opacity:1;pointer-events:auto}
+.entry-card{width:min(420px,100%);max-height:100%;overflow:auto;padding:28px 24px 22px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:0 30px 80px var(--shadow)}
+.entry-orb{display:block;width:56px;height:56px;margin:0 auto 14px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#fff 0 8%,#f4a3cb 30%,#b0258a 64%,#5a1480 100%);box-shadow:0 0 40px rgba(176,37,138,.55)}
+.entry h1{margin:0;text-align:center;font-size:26px;font-weight:600;letter-spacing:-.02em}
+.entry h2{margin:0;font-size:20px;font-weight:600}
+.entry h2.mid{text-align:center;margin-top:4px}
+.tagline{margin:6px 0 22px;text-align:center;color:var(--muted);font-size:13.5px;line-height:1.55}
+.tagline.left{text-align:left;margin:4px 0 14px}
+.choice{display:flex;align-items:center;gap:14px;width:100%;padding:14px;border-radius:14px;border:1px solid var(--line2);text-align:left;margin-bottom:10px;transition:border-color .2s,background .2s}
+.choice:hover{border-color:rgba(255,255,255,.3);background:var(--raise)}
+.choice.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.choice.primary:hover{background:var(--accent-press);border-color:var(--accent-press)}
+.choice.resume{border-color:var(--accent)}
+.choice svg{width:24px;height:24px;flex:none}
+.choice .ct{flex:1;min-width:0}
+.choice b{display:block;font-size:14.5px;font-weight:600}
+.choice .ct span{display:block;font-size:12px;opacity:.78;margin-top:1px;line-height:1.4}
+.choice .go{opacity:.7}
+.link-btn{display:block;margin:12px auto 0;padding:8px 12px;font-size:13px;font-weight:500;color:var(--muted)}
+.link-btn:hover{color:var(--ink)}
+.step-head{display:flex;align-items:center;gap:4px;margin:-10px 0 12px -10px}
+.spot-row{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--raise);margin:2px 0 6px}
+.spot-row > svg{width:24px;height:24px;color:var(--muted);flex:none}
+.spot-row.on > svg{color:var(--accent-hi)}
+.code-big{font-size:32px;font-weight:600;letter-spacing:.3em;text-align:center;margin:2px 0 12px;padding-left:.3em}
+.qr{width:172px;height:172px;margin:6px auto 12px;padding:12px;border-radius:16px;background:#fff;display:grid;place-items:center}
+.qr img,.qr canvas{width:148px;height:148px}
+.code-input{width:100%;height:60px;text-align:center;font-size:28px;font-weight:600;letter-spacing:.4em;text-transform:uppercase;padding:0 0 0 .4em;border-radius:12px;background:var(--bg);border:1px solid var(--line2);color:var(--ink)}
+.code-input::placeholder{color:var(--faint);letter-spacing:.3em}
+.code-input:focus{outline:none;border-color:rgba(255,255,255,.42)}
+.btn.full{display:flex;width:100%;padding:12px;font-size:13.5px;margin-top:16px}
+.small.mid{text-align:center;margin:12px 0 0}
+
+/* Party sheet + recap */
+.ps-meta{flex:1;font-size:12px;color:var(--faint);min-width:140px}
+.ps-set{margin-top:6px}
+.mosaic{display:grid;gap:4px;border-radius:14px;overflow:hidden;margin:4px 0 14px}
+.mosaic img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:var(--raise)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stat{padding:10px 12px;border-radius:12px;background:var(--raise);min-width:0}
+.stat b{display:block;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat span{display:block;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qzone{position:fixed;right:var(--gr);top:30%;height:40%;z-index:21;width:104px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;padding:22px 10px 12px;border-radius:20px;border:1.5px dashed var(--line2);background:rgba(176,37,138,.06);color:var(--muted);text-align:center;pointer-events:none;opacity:0;transform:translateX(16px);transition:opacity .2s,transform .25s,background .2s,border-color .2s,color .2s}
+.qzone.show{opacity:1;transform:none}
+.qzone.over{border-color:var(--accent-hi);border-style:solid;background:rgba(176,37,138,.22);color:var(--ink);transform:scale(1.04)}
+.qzone svg{width:24px;height:24px}
+.qhint{position:fixed;right:var(--gr);top:50%;z-index:21;width:40px;height:40px;display:grid;place-items:center;border-radius:12px;color:var(--faint);opacity:.75;transition:opacity .2s,color .2s,background .2s}
+.qhint:hover{opacity:1;color:var(--ink);background:var(--raise)}
+.qhint svg{width:24px;height:24px}
+.qhint.away{opacity:0;pointer-events:none}
+.qhint.active{opacity:1;color:var(--ink)}
+.qhint[data-count]:not([data-count=""])::after{content:attr(data-count);position:absolute;top:2px;right:0;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--accent);color:#fff;font-size:10px;font-weight:600;line-height:16px;text-align:center}
+.qzone b{font-size:12.5px;font-weight:600;line-height:1.3}
+.qzone span{font-size:11px;color:var(--faint)}
+@media (min-width:761px){ .np,.right{align-self:start;height:44px} }
+.offline{position:fixed;left:50%;bottom:calc(var(--dock-h, 96px) + 70px);transform:translateX(-50%);z-index:30;padding:7px 14px;border-radius:999px;font-size:12px;background:var(--surface2);border:1px solid var(--line2);color:var(--muted);white-space:nowrap}
+@media (max-width:760px){
+  .p-why{display:none}
+  .qzone{width:84px;padding:10px 6px}
+  .qzone b{font-size:11.5px}
+  .entry{place-items:end center;padding:12px var(--gr) calc(12px + env(safe-area-inset-bottom, 0px)) var(--gl)}
+  .entry-card{padding:24px 18px 18px;border-radius:20px}
+  .panel-wrap{left:var(--gl);width:auto;top:calc(var(--gt) + 96px);bottom:calc(var(--dock-h, 96px) + 58px)}
+}
+
+/* Toasts */
+.toasts{position:fixed;top:calc(var(--gt) + 106px);left:50%;transform:translateX(-50%);z-index:70;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:max-content;max-width:calc(100% - 32px)}
+.toast{padding:8px 15px;border-radius:999px;font-size:12.5px;font-weight:500;color:var(--ink);background:var(--surface2);border:1px solid var(--line2);box-shadow:0 8px 24px var(--shadow);animation:tIn .4s ease both;text-align:center}
+.toast.out{animation:tOut .35s ease forwards}
+@keyframes tIn{from{opacity:0;transform:translateY(-6px)}}
+@keyframes tOut{to{opacity:0;transform:translateY(-6px)}}
+
+.chips-h{display:none}
+@media (min-width:761px){
+  .chips{top:calc(var(--gt) + 66px);left:calc(var(--gl) - 4px);right:auto;width:auto;max-width:none;flex-direction:column;gap:8px;padding:4px;overflow:visible}
+  .chips-h{display:block;padding:2px 12px 6px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:500}
+  .chip{min-width:150px;padding:10px 12px;border-radius:10px;font-size:13px;text-align:left;background:none;border:none}
+  .chip:hover{background:var(--raise)}
+  .chip.on{background:var(--accent)}
+  .toasts{top:calc(var(--gt) + 64px)}
+}
+@media (max-width:1100px){ .center{width:min(480px, 40vw)} .vol input{width:84px} .transport{gap:12px} }
+@media (max-width:900px) and (min-width:761px){ .center{width:340px} .transport{gap:6px} .vol input{width:64px} }
+@media (max-width:760px){
+  .brand small{display:none}
+  .top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand actions" "search search";gap:8px}
+  .search{width:100%}
+  .search-box kbd{display:none}
+  .chips{left:0;right:0;width:auto;max-width:100%;padding:6px 16px;top:calc(var(--gt) + 96px)}
+  .bar{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"center center" "np right";gap:6px 8px;padding:40px var(--gr) calc(8px + env(safe-area-inset-bottom, 0px)) var(--gl)}
+  .bar{padding-bottom:calc(14px + env(safe-area-inset-bottom, 0px))}
+  .edge{display:block;top:auto;bottom:calc(4px + env(safe-area-inset-bottom, 0px));left:var(--gl);right:var(--gr);border-radius:1px;overflow:hidden}
+  .p-cover{width:44px;height:44px}
+  .center{width:100%}
+  .transport{width:100%;justify-content:space-between;padding:0 6px;height:48px}
+  .core{width:70px;height:70px}
+  .core .orb{width:50px;height:50px}
+  .charge{left:-10px;top:-10px;width:70px;height:70px}
+  .progress{display:none}
+  .panel-inner{padding:16px 16px 20px;gap:20px}
+  #toolsSlot .tools{gap:8px}
+  #toolsSlot .vol{flex:1}
+  #toolsSlot .vol input{width:100%}
+  .history{top:var(--gt);left:var(--gl);bottom:var(--gb);width:auto;z-index:45}
+  .toasts{top:calc(var(--gt) + 148px)}
+}
+@media (prefers-reduced-motion:reduce){ .history,.panel-wrap{transition:none} .core .orb::before,.core .orb::after{animation:none;opacity:0} }
+
+/* gradient fills */
+.btn.primary,.choice.primary,.chip.on,.avatar,.switch input:checked{background:var(--grad);border-color:transparent}
+.btn.primary:hover,.choice.primary:hover{background:var(--grad);border-color:transparent;filter:brightness(.92)}
+.edge span{background:var(--grad)}
+.qhint[data-count]:not([data-count=""])::after{background:var(--grad)}
+.entry-orb,.brand-orb{box-shadow:0 0 56px rgba(208,47,74,.4)}
+</style>
+</head>
+<body>
+
+
+<canvas id="stage" aria-label="A field of floating song bubbles. Tap a bubble to pop it and listen."></canvas>
+
+<header class="top">
+  <button class="brand" id="brandBtn" title="Back to start" aria-label="Back to start"><span class="brand-orb"></span><div><b>Bubble Beats<span class="by">by Abi</span></b><small id="brandSub">Pop a bubble, find a song</small></div></button>
+  <div class="search" id="search" role="search">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="q" placeholder="Search songs or artists" autocomplete="off" spellcheck="false" aria-label="Search songs or artists" aria-controls="results" aria-expanded="false">
+      <kbd>/</kbd>
+      <button class="clear-q" id="clearQ" aria-label="Clear search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="results" id="results" role="listbox" hidden></div>
+  </div>
+  <div class="top-actions">
+    <button class="icon-btn" id="libraryBtn" title="Your library (L)" aria-label="Open your library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v16M10 4v16M14.5 4.6l4.6 15"/></svg>
+    </button>
+    <button class="icon-btn" id="profileBtn" title="Profile" aria-label="Profile and Spotify account" aria-haspopup="true" aria-expanded="false"></button>
+  </div>
+</header>
+
+<nav class="chips" id="chips" aria-label="Party moment"></nav>
+
+<footer class="dock idle" id="dock" aria-label="Player">
+  <div class="panel-wrap"><div class="panel">
+    <button class="icon-btn p-close" id="pClose" aria-label="Close player panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <div class="panel-inner">
+    <div class="pcol">
+      <span class="p-label" id="pNowLabel">Player</span>
+      <div class="vis"><canvas id="spectrum"></canvas></div>
+      <div class="embed" id="embedWrap"><div id="embed"></div></div>
+      <p class="p-note" id="pNote"></p>
+    </div>
+    <div class="pcol">
+      <span class="p-label">Up next</span>
+      <div class="upnext" id="upNext"></div>
+    </div>
+    <div class="pcol">
+      <div id="toolsSlot"></div>
+      <div class="ctrl">
+        <label for="spawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="14" r="5"/><circle cx="17" cy="7" r="3"/></svg>Bubble speed<output id="spawnOut">every 4.4s</output></label>
+        <input type="range" id="spawn" min="0" max="10" step="1" value="4">
+      </div>
+      <div class="ctrl">
+        <label>Playback</label>
+        <div class="seg" id="sourceSeg" role="group" aria-label="Playback source">
+          <button data-src="spotify">Spotify player</button><button data-src="preview">Clip or sketch</button>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+
+  <div class="bar">
+    <div class="edge"><span id="pMiniBar"></span></div>
+    <button class="core" id="coreBtn" title="Sound Core: release a bubble (B)" aria-label="Sound Core: release a bubble">
+          <svg class="hump" viewBox="-72 -42 144 56" aria-hidden="true"><path class="hf" d="M-70.05 10.14A34 34 0 0 0 -37.86 -12.9A40 40 0 0 1 37.86 -12.9A34 34 0 0 0 70.05 10.14V12.64H-70.05Z"/><path class="hs" d="M-70.05 10.14A34 34 0 0 0 -37.86 -12.9A40 40 0 0 1 37.86 -12.9A34 34 0 0 0 70.05 10.14"/></svg>
+          <span class="orb" id="coreOrb"><svg class="charge" viewBox="0 0 76 76"><circle id="chargeC" cx="38" cy="38" r="36"/></svg></span>
+          <span class="tip" aria-hidden="true">Release a song bubble<kbd>B</kbd></span>
+        </button>
+    <div class="np">
+      <div class="p-cover"><span class="orb"></span><img id="pCover" alt=""></div>
+      <div class="p-meta">
+        <h3 id="pTitle">Nothing playing</h3>
+        <p id="pArtist">Pop a bubble or tap the Sound Core</p>
+        <span class="p-why" id="pWhy"></span>
+      </div>
+      <button class="ctl like" id="likeBtn" aria-pressed="false" title="Save song" aria-label="Save song">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg>
+      </button>
+    </div>
+    <div class="center">
+      <div class="transport">
+        <button class="ctl" id="autoBtn" aria-pressed="false" title="Auto-pop: keeps playing new songs on its own" aria-label="Auto-pop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z"/></svg>
+        </button>
+        <button class="ctl" id="prevBtn" title="Previous" aria-label="Previous">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M5 5h2.2v14H5zM19.5 5.6v12.8a.9.9 0 0 1-1.4.74L9 12.74a.9.9 0 0 1 0-1.48l9.1-6.4a.9.9 0 0 1 1.4.74z"/></svg>
+        </button>
+        <button class="play" id="playBtn" aria-label="Play"></button>
+        <button class="ctl" id="nextBtn" title="Next: pops the next bubble" aria-label="Next">
+          <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16.8 5H19v14h-2.2zM4.5 5.6v12.8a.9.9 0 0 0 1.4.74L15 12.74a.9.9 0 0 0 0-1.48l-9.1-6.4a.9.9 0 0 0-1.4.74z"/></svg>
+        </button>
+        <button class="ctl" id="clearBtn" title="Clear bubbles" aria-label="Clear bubbles">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v8"/><path d="M8.2 10h7.6a1 1 0 0 1 1 .87L18 20.9a1 1 0 0 1-1 1.1H7a1 1 0 0 1-1-1.1l1.2-10.03a1 1 0 0 1 1-.87z"/><path d="M7.4 14h9.2M10 17v5M14 17v5"/></svg>
+        </button>
+      </div>
+      <div class="progress"><time id="pCur">0:00</time><div class="track-bar" id="seekBar" role="slider" aria-label="Seek" tabindex="0"><span id="pBar"></span></div><time id="pDur">0:30</time></div>
+    </div>
+    <div class="right">
+      <button class="ctl" id="deviceBtn" title="Playing on" aria-label="Where the music plays" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="11" height="18" rx="2"/><circle cx="7.5" cy="14" r="3"/><path d="M7.5 7.5h.01"/><rect x="16" y="8" width="6" height="13" rx="1.5"/></svg>
+      </button>
+      <div class="tools" id="tools">
+        <div class="vol">
+          <button class="ctl mute" id="muteBtn" title="Mute" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path class="wave" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/><path class="x" d="m16 9 5 6M21 9l-5 6"/></svg></button>
+          <input type="range" id="vol" min="0" max="100" step="1" value="80" aria-label="Volume">
+        </div>
+      </div>
+      <button class="ctl chev" id="collapseBtn" title="Now playing panel" aria-label="Show more player controls" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M15 4v16"/><path class="pane" d="M15.5 5h3a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5h-3z"/></svg>
+      </button>
+    </div>
+  </div>
+</footer>
+
+<aside class="history" id="history" aria-label="Your library">
+  <div class="h-head">
+    <h2>Your Library<small id="statusText">Party library</small></h2>
+    <button class="btn" id="hClear">Clear</button>
+    <button class="icon-btn" id="hClose" aria-label="Close library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="seg h-tabs" id="libTabs" role="tablist" aria-label="Library sections"><button data-tab="history" role="tab">History</button><button data-tab="saved" role="tab">Saved</button><button data-tab="parties" role="tab">Parties</button></div>
+  <div class="h-sub" id="hSub">Popped · tap to release again</div>
+  <div class="h-list" id="hList"></div>
+</aside>
+
+<div class="modal" id="settings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="setTitle">Connect Spotify</h2>
+      <button class="icon-btn" data-close aria-label="Close settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <p class="sandbox-note" id="sandboxNote" hidden>This preview can't reach outside services, so live Spotify tracks and the embedded Spotify player only work when the page runs in your own browser. Here, each bubble plays a synth sketch, and Listen on Spotify opens the real track.</p>
+    <p class="lead">Bubble Beats starts with a party library. Log in with your own Spotify developer app and the bubbles fill with your top tracks and liked songs, sorted into party moments, with real album art.</p>
+    <div class="field">
+      <label for="cid">Client ID <span>from developer.spotify.com</span></label>
+      <input id="cid" placeholder="e.g. 3f9a1c…" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="ruri">Redirect URI <span>add this to your Spotify app</span></label>
+      <div class="copy-row"><input id="ruri" readonly><button class="btn" id="copyUri">Copy</button></div>
+    </div>
+    <button class="btn primary" id="pkceBtn" style="width:100%;padding:11px">Log in with Spotify</button>
+    <details class="adv">
+      <summary>No redirect available? Use Client Credentials</summary>
+      <div class="field">
+        <label for="csec">Client Secret</label>
+        <input id="csec" type="password" placeholder="For local prototyping only" autocomplete="off">
+      </div>
+      <p class="small">The secret stays in memory for this tab and is never saved. Anything in a browser can be inspected, so keep this to local testing.</p>
+      <button class="btn" id="ccBtn">Connect with Client Credentials</button>
+    </details>
+    <div class="field">
+      <label>Default playback</label>
+      <div class="seg" id="sourceSeg2" role="group" aria-label="Default playback source">
+        <button data-src="spotify">Spotify player</button><button data-src="preview">30s clip or sketch</button>
+      </div>
+    </div>
+    <div class="note">
+      <p><b>Setup</b></p>
+      <ol>
+        <li>Create an app at developer.spotify.com/dashboard with Web API enabled.</li>
+        <li>Add the Redirect URI above to the app. Spotify only accepts https addresses or http://127.0.0.1, so open this page from a web address, not a downloaded file.</li>
+        <li>Paste the Client ID here and log in.</li>
+      </ol>
+      Your songs are sorted into party moments by artist genre and release year. Client Credentials can't see your own library, so it fills each moment with Spotify searches instead.
+    </div>
+    <div class="sheet-foot">
+      <span id="connState">Not connected. Using the party library.</span>
+      <button class="btn" id="refreshBtn" disabled>Refresh tracks</button>
+      <button class="btn" id="disconnectBtn" disabled>Disconnect</button>
+    </div>
+  </div>
+</div>
+
+<div class="pop profile-menu" id="profileMenu" role="menu" aria-label="Profile">
+  <div class="pm-head"><span id="pmFace"></span><div class="pm-who"><b id="pmName">You</b><span id="pmPlan"></span></div></div>
+  <button class="btn primary pm-cta" id="pmConnect">Connect Spotify</button>
+  <div class="pm-sep"></div>
+  <button class="pm-item" data-pm="saved" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg><span>Saved songs</span><em id="pmSaved"></em></button>
+  <button class="pm-item" data-pm="parties" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Past parties</span><em id="pmParties"></em></button>
+  <button class="pm-item" data-pm="party" id="pmParty" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Party settings</span></button>
+  <button class="pm-item" data-pm="spotify" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span>Spotify connection</span></button>
+  <div class="pm-sep"></div>
+  <button class="pm-item quiet" data-pm="home" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg><span>Start screen</span></button>
+  <button class="pm-item quiet" data-pm="disconnect" id="pmDisconnect" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Disconnect Spotify</span></button>
+</div>
+<div class="pop device-pop" id="devicePop" role="dialog" aria-label="Playing on"></div>
+<button class="qhint" id="qhint" title="Queue: drag a bubble here to add it" aria-label="Show the queue">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h13M3 18h8"/><path d="M18 15v6M15 18h6"/></svg>
+</button>
+<div class="qzone" id="qzone" aria-hidden="true">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h13M3 18h8"/><path d="M18 15v6M15 18h6"/></svg>
+  <b id="qzoneLabel">Add to queue</b><span id="qzoneCount"></span>
+</div>
+<div class="offline" id="offline" hidden>You're offline. Bubbles still play as sketches.</div>
+
+<section class="entry" id="entry" aria-label="Welcome to Bubble Beats" aria-hidden="true">
+  <div class="entry-card">
+    <div class="step" data-step="home">
+      <span class="entry-orb"></span>
+      <h1>Bubble Beats</h1>
+      <p class="tagline">Songs float up as bubbles. Pop one and it plays.<br>Made for parties, fun on your own.</p>
+      <button class="choice resume" id="resumeBtn" data-go="resume" hidden>
+        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8z"/></svg>
+        <span class="ct"><b>Resume party</b><span id="resumeText"></span></span>
+        <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <button class="choice primary" id="hostChoice" data-go="host">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><path d="M12 6h.01"/></svg>
+        <span class="ct"><b>Start a party</b><span>Music plays on this device. Friends add songs with a code.</span></span>
+        <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <button class="choice" data-go="join">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h3M21 17v4h-1"/></svg>
+        <span class="ct"><b>Join a party</b><span>Scan the host's QR code or type their code.</span></span>
+        <svg class="go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <button class="link-btn" id="exploreBtn" data-go="explore">Just explore songs</button>
+    </div>
+
+    <div class="step" data-step="host" hidden>
+      <div class="step-head"><button class="icon-btn" data-go="home" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button><h2>Start a party</h2></div>
+      <div class="field"><label for="partyName">Party name</label><input id="partyName" maxlength="40" autocomplete="off"></div>
+      <div class="spot-row" id="hostSpot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span class="sw-text"><b id="hostSpotName">Spotify not connected</b><span id="hostSpotSub"></span></span>
+        <button class="btn" id="hostConnect">Connect</button>
+      </div>
+      <label class="switch"><span class="sw-text"><b>Guests can skip songs</b><span>Off means guests can only add to the queue.</span></span><input type="checkbox" id="hostSkip"></label>
+      <label class="switch"><span class="sw-text"><b>Hide explicit songs</b><span>Uses Spotify's explicit tag. Handy for family parties.</span></span><input type="checkbox" id="hostExplicit"></label>
+      <button class="btn primary full" id="hostStart">Start party</button>
+    </div>
+
+    <div class="step" data-step="live" hidden>
+      <h2 class="mid">You're live</h2>
+      <p class="tagline">Friends scan this or type the code to add songs.<br>They don't need Spotify.</p>
+      <div class="qr" id="liveQr"></div>
+      <div class="code-big" id="liveCode"></div>
+      <div class="copy-row"><input id="liveLink" readonly aria-label="Party link"><button class="btn" data-copy="#liveLink">Copy link</button></div>
+      <button class="btn primary full" data-go="enter">Let's go</button>
+    </div>
+
+    <div class="step" data-step="join" hidden>
+      <div class="step-head"><button class="icon-btn" data-go="home" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg></button><h2>Join a party</h2></div>
+      <p class="tagline left">Type the 4-character code on the host's screen.</p>
+      <input class="code-input" id="joinCode" maxlength="4" autocomplete="off" spellcheck="false" aria-label="Party code" placeholder="CODE">
+      <button class="btn primary full" id="joinBtn">Join party</button>
+      <p class="small mid">This prototype has no server, so any code opens a demo party hosted by Maya.</p>
+    </div>
+  </div>
+</section>
+
+<div class="modal" id="partySheet" role="dialog" aria-modal="true" aria-labelledby="psTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="psTitle">Party</h2><button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div id="psBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="recap" role="dialog" aria-modal="true" aria-labelledby="recapTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="recapTitle">That's a wrap</h2><button class="icon-btn" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <p class="lead" id="recapLead"></p>
+    <div class="mosaic" id="recapMosaic"></div>
+    <div class="stats" id="recapStats"></div>
+    <div class="sheet-foot"><button class="btn primary" id="recapSave">Save as playlist</button><button class="btn" id="recapCopy">Copy song list</button><span style="flex:1"></span><button class="btn" data-close>Done</button></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- utilities ---------- */
+const $ = s => document.querySelector(s);
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => a + Math.random() * (b - a);
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+const easeBack = x => { const c1 = 1.3, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+function hashStr(s){ let h = 2166136261; for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function mulberry(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function hexToRgb(h){ h = String(h).trim().replace('#',''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+const rgba = (hex, a) => { const [r,g,b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; };
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+  del(k){ try { localStorage.removeItem(k); } catch(e){} }
+};
+function ago(ts){ const s = (Date.now() - ts) / 1000; if (s < 45) return 'just now'; if (s < 3600) return Math.round(s / 60) + 'm ago'; if (s < 86400) return Math.round(s / 3600) + 'h ago'; return Math.round(s / 86400) + 'd ago'; }
+
+/* canvas palette (mirrors the CSS tokens): neutrals + one accent */
+const T = { bg:'#0d0b12', ink:'#f3f1f8', muted:'#a19cb3', faint:'#6b6680', accent:'#b0258a', accentHi:'#f4a3cb', deep:'#2a1d6b' };
+
+/* ---------- data ---------- */
+const GENRES = [
+  { key:'synthwave',  label:'Synthwave',  bpm:100, q:['synthwave','retrowave','outrun'] },
+  { key:'lofi',       label:'Lofi',       bpm:78,  q:['lo-fi beats','chillhop','lo-fi'] },
+  { key:'pop',        label:'Pop',        bpm:110, q:['pop','dance pop'] },
+  { key:'indie',      label:'Indie',      bpm:118, q:['indie','indie rock','indie pop'] },
+  { key:'bass',       label:'Deep Bass',  bpm:140, q:['dubstep','bass house','trap'] },
+  { key:'electronic', label:'Electronic', bpm:124, q:['electronic','house','edm'] },
+];
+const G = Object.fromEntries(GENRES.map(g => [g.key, g]));
+// Party moments: how a night actually flows. A song can sit in more than one.
+const MOMENTS = [
+  { key:'arrivals',  label:'Arrivals',    q:['genre:"soul"','genre:"neo soul"','genre:"indie folk"'] },
+  { key:'warmup',    label:'Warm up',     q:['genre:"nu disco"','genre:"funk"','genre:"indie pop"'] },
+  { key:'dance',     label:'Dance floor', q:['genre:"dance pop"','genre:"house"','genre:"reggaeton"'] },
+  { key:'singalong', label:'Singalongs',  q:['genre:"pop rock"','genre:"britpop"','genre:"pop"'] },
+  { key:'throwback', label:'Throwbacks',  q:['genre:"pop" year:1975-1999','genre:"disco" year:1970-1989','genre:"rock" year:1980-2005'] },
+  { key:'wind',      label:'Wind down',   q:['genre:"chill"','genre:"ambient pop"','genre:"acoustic"'] },
+];
+const M = Object.fromEntries(MOMENTS.map(m => [m.key, m]));
+// [Spotify track id, title, artist, sound style (for the sketch), bpm, moments]
+const MOCK_RAW = [
+  ['0U0ldCRmgCqhVvD6ksG63j','Nightcall','Kavinsky','synthwave',91,['wind']],
+  ['1TuopWDIuDi1553081zvuU','Resonance','HOME','synthwave',105,['wind']],
+  ['0VjIjW4GlUZAMYd2vXMi3b','Blinding Lights','The Weeknd','synthwave',171,['dance','singalong']],
+  ['2WfaOiMkCvy7F5fcp2zZ8L','Take On Me','a-ha','synthwave',169,['singalong','throwback']],
+  ['1eyzqe2QqGZUmfcPZtrIyt','Midnight City','M83','synthwave',105,['warmup']],
+  ['0wXuerDYiBnERgIpbb3JBR','Redbone','Childish Gambino','lofi',81,['arrivals']],
+  ['3xKsf9qdS1CyvXSMEid6g8','Pink + White','Frank Ocean','lofi',80,['arrivals']],
+  ['7H0ya83CMmgFcOhw0UB6ow','Space Song','Beach House','lofi',74,['wind']],
+  ['7eJMfftS33KTjuF7lTsMCx','death bed (coffee for your head)','Powfu, beabadoobee','lofi',72,['wind']],
+  ['2ZWlPOoWh0626oTaHrnl2a','Ivy','Frank Ocean','lofi',70,['wind']],
+  ['463CkQjx2Zk1yXoBuierM9','Levitating','Dua Lipa','pop',103,['dance']],
+  ['7qiZfU4dY1lWllzX7mPBI3','Shape of You','Ed Sheeran','pop',96,['singalong','dance']],
+  ['2Fxmhks0bxGSBdJ92vM42m','bad guy','Billie Eilish','pop',135,['warmup']],
+  ['4Dvkj6JhhA12EX05fT7y2e','As It Was','Harry Styles','pop',174,['singalong','warmup']],
+  ['3KkXRkHbMCARz0aVfEt68P','Sunflower','Post Malone, Swae Lee','pop',90,['arrivals','warmup']],
+  ['5FVd6KXrgO9B3JPmC8OPst','Do I Wanna Know?','Arctic Monkeys','indie',85,['warmup']],
+  ['003vvx7Niy0yvhvHt4a68B','Mr. Brightside','The Killers','indie',148,['singalong']],
+  ['2QjOHCTQ1Jl3zawyYOpxh6','Sweater Weather','The Neighbourhood','indie',124,['arrivals']],
+  ['6K4t31amVTZDgR3sKmwUJJ','The Less I Know The Better','Tame Impala','indie',117,['warmup']],
+  ['02MWAaffLxlfxAUY7c5dvx','Heat Waves','Glass Animals','indie',81,['arrivals']],
+  ['3FtYbEfBqAlGO46NUDQSAt','Electric Feel','MGMT','indie',103,['warmup']],
+  ['67awxiNHNyjMXhVgsHuIrs','Turn Down for What','DJ Snake, Lil Jon','bass',100,['dance']],
+  ['4rwpZEcnalkuhPyGkEdhu0','Scary Monsters and Nice Sprites','Skrillex','bass',140,['dance']],
+  ['7KXjTSCq5nL1LoYtL7XAwS','HUMBLE.','Kendrick Lamar','bass',150,['dance']],
+  ['2xLMifQCjDGFmkHkpNLD9h','SICKO MODE','Travis Scott','bass',155,['dance']],
+  ['69kOkLUCkxIZYexIgSG8rq','Get Lucky','Daft Punk, Pharrell Williams, Nile Rodgers','electronic',116,['warmup','dance']],
+  ['0DiWol3AO6WpXZgp0goxAV','One More Time','Daft Punk','electronic',123,['dance','throwback']],
+  ['0nrRP2bk19rLc0orkWPQk2','Wake Me Up','Avicii','electronic',124,['singalong','dance']],
+  ['5UqCQaDshqbIk3pkhy4Pjg','Levels','Avicii','electronic',126,['dance']],
+  // party staples
+  ['0GjEhVFGZW8afUYGChu3Rr','Dancing Queen','ABBA','pop',101,['singalong','throwback']],
+  ['4bHsxqR3GMrXTxEPLuK5ue',"Don't Stop Believin'",'Journey','indie',119,['singalong','throwback']],
+  ['5ChkMS8OtdzJeqyybCc9R5','Billie Jean','Michael Jackson','pop',117,['dance','throwback']],
+  ['2374M0fQpWi3dLnB54qaLX','Africa','TOTO','pop',93,['singalong','throwback']],
+  ['2RlgNHKcydI9sayD2Df2xp','Mr. Blue Sky','Electric Light Orchestra','pop',89,['singalong','throwback']],
+  ['2PpruBYCo4H7WOBJ7Q2EwM','Hey Ya!','OutKast','pop',159,['dance','singalong']],
+  ['6I9VzXrHxO9rA9A5euc8Ak','Toxic','Britney Spears','pop',143,['dance','throwback']],
+  ['0ofHAoxe9vBkTCp2UQIavz','Dreams','Fleetwood Mac','lofi',120,['arrivals','throwback']],
+  ['3AJwUDP919kvQ9QcozQPxg','Yellow','Coldplay','indie',87,['singalong','wind']],
+  ['1mea3bSkSGXuIRvnydlB5b','Viva La Vida','Coldplay','indie',138,['singalong']],
+  ['7MXVkk9YMctZqd1Srtv4MB','Starboy','The Weeknd, Daft Punk','bass',186,['warmup']],
+  ['1BxfuPKGuaTgP7aM0Bbdwr','Cruel Summer','Taylor Swift','pop',170,['singalong','dance']],
+  ['2qSkIjg1o9h3YT9RAgYN75','Espresso','Sabrina Carpenter','pop',104,['warmup','dance']],
+  ['32OlwWuMpZ6b0aN2RZOeMS','Uptown Funk','Mark Ronson, Bruno Mars','electronic',115,['dance','singalong']],
+  ['2grjqo0Frpf2okIBiifQKs','September','Earth, Wind & Fire','pop',126,['dance','throwback']],
+  ['3PfIrDoz19wz7qK7tYeu62',"Don't Start Now",'Dua Lipa','electronic',124,['dance']],
+  ['4kbj5MwxO1bq9wjT5g9HaA','Shut Up and Dance','WALK THE MOON','indie',128,['singalong']],
+];
+function makeTrack(o){
+  const g = G[o.genre] || G.pop;
+  return { id:o.id, title:o.title, artist:o.artist, genre:g.key, m:o.m || [], bpm:o.bpm || g.bpm, cover:o.cover || null, preview:o.preview || null, live:!!o.live, ex:!!o.ex, why:o.why || null,
+    url:o.url || ('https://open.spotify.com/track/' + o.id) };
+}
+const EXPLICIT = new Set(['7KXjTSCq5nL1LoYtL7XAwS','2xLMifQCjDGFmkHkpNLD9h']);
+const MOCK = MOCK_RAW.map(([id,title,artist,genre,bpm,m]) => makeTrack({id,title,artist,genre,bpm,m,ex:EXPLICIT.has(id)}));
+function momentLabel(t){
+  const ms = t.m || [], k = state.filter !== 'all' && ms.includes(state.filter) ? state.filter : ms[0];
+  return k && M[k] ? M[k].label : (G[t.genre] || G.pop).label;
+}
+
+/* ---------- state ---------- */
+const state = {
+  pool:MOCK.slice(), live:false, mine:false, filter:'all', source:store.get('bb.src3', 'spotify'),
+  spawnLevel:4, autopop:false, autoNext:0, autoTarget:null, floor:0, hintOut:false,
+  history:store.get('bb.history', []), cursor:0, seekPreview:null, hover:null, energy:0, bands:new Float32Array(40), recent:[],
+  queue:[], nope:new Set(), noExplicit:false, libTab:'history', why:null, nowWhy:null, hintT0:0, spotLost:false
+};
+const AUTO_MS = 14000;
+
+/* ---------- covers (procedural ones stay in the single accent hue) ---------- */
+const coverCache = new Map();
+let oembedFails = 0, historyDirty = false;
+function proceduralCover(t){
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'), rng = mulberry(hashStr(t.id + 'cover'));
+  const lg = x.createLinearGradient(0, 0, S * .5, S); lg.addColorStop(0, T.accent); lg.addColorStop(1, T.deep);
+  x.fillStyle = lg; x.fillRect(0, 0, S, S);
+  const wash = x.createRadialGradient(S * .3, S * .25, 0, S * .3, S * .25, S * .9); wash.addColorStop(0, 'rgba(255,255,255,.35)'); wash.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = wash; x.fillRect(0, 0, S, S);
+  x.fillStyle = 'rgba(255,255,255,.35)'; x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 2;
+  switch (t.genre){
+    case 'synthwave': x.beginPath(); x.arc(128, 150, 60, Math.PI, 0); x.fill(); x.fillRect(0, 150, S, 2); break;
+    case 'lofi': x.beginPath(); x.arc(168, 84, 30, 0, TAU); x.fill(); break;
+    case 'pop': for (let i = 0; i < 3; i++){ x.beginPath(); x.arc(72 + i * 56, 128 + Math.sin(i * 2) * 24, 42, 0, TAU); x.fill(); } break;
+    case 'indie': x.save(); x.translate(128, 128); x.rotate(-.45); for (let i = -6; i < 6; i += 2) x.fillRect(-200, i * 26, 400, 22); x.restore(); break;
+    case 'bass': for (let i = 1; i < 8; i++){ x.beginPath(); x.arc(128, 200, i * 20, 0, TAU); x.stroke(); } break;
+    default: for (let gx = 0; gx < 6; gx++) for (let gy = 0; gy < 6; gy++){ x.beginPath(); x.arc(24 + gx * 42, 24 + gy * 42, 2 + rng() * 5, 0, TAU); x.fill(); }
+  }
+  return c;
+}
+function loadImg(entry, url){ const im = new Image(); im.onload = () => { entry.img = im; entry.url = url; onCoverReady(entry.id); }; im.src = url; }
+function getCover(t){
+  let c = coverCache.get(t.id);
+  if (!c){ c = { id:t.id, proc:proceduralCover(t), img:null, url:null, data:null, tried:false }; coverCache.set(t.id, c);
+    if (t.cover) loadImg(c, t.cover); else tryOembed(t, c); }
+  return c;
+}
+async function tryOembed(t, c){
+  if (c.tried || oembedFails >= 2) return; c.tried = true;
+  try { const r = await fetch('https://open.spotify.com/oembed?url=' + encodeURIComponent('https://open.spotify.com/track/' + t.id));
+    if (!r.ok) throw 0; const j = await r.json(); if (j.thumbnail_url){ t.cover = j.thumbnail_url; loadImg(c, j.thumbnail_url); } }
+  catch(e){ oembedFails++; }
+}
+function coverSrc(t){ const c = getCover(t); if (t.cover) return t.cover; if (c.url) return c.url; if (!c.data) c.data = c.proc.toDataURL('image/jpeg', .88); return c.data; }
+function onCoverReady(id){
+  if (Player.track && Player.track.id === id) $('#pCover').src = coverSrc(Player.track);
+  const h = state.history.find(x => x.id === id); if (h){ const c = coverCache.get(id); if (c && c.url){ h.cover = c.url; historyDirty = true; } }
+}
+
+/* ---------- audio engine ---------- */
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch(e){}
+const A = {
+  ctx:null, volume:.8,
+  init(){
+    if (this.ctx){ if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); return this.ctx; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+    const ctx = this.ctx = new AC();
+    this.master = ctx.createGain(); this.master.gain.value = this.volume;
+    this.comp = ctx.createDynamicsCompressor(); this.comp.threshold.value = -16; this.comp.ratio.value = 3;
+    this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 512; this.analyser.smoothingTimeConstant = .82;
+    this.music = ctx.createGain(); this.music.gain.value = 1.1;
+    this.tone = ctx.createBiquadFilter(); this.tone.type = 'lowpass'; this.tone.frequency.value = 5200;
+    this.music.connect(this.tone); this.tone.connect(this.analyser); this.analyser.connect(this.comp); this.comp.connect(this.master); this.master.connect(ctx.destination);
+    this.fft = new Uint8Array(this.analyser.frequencyBinCount);
+    const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1; this.noiseBuf = buf;
+    const rl = Math.floor(ctx.sampleRate * 2.6), ir = ctx.createBuffer(2, rl, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++){ const id = ir.getChannelData(ch); for (let i = 0; i < rl; i++) id[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / rl, 2.6); }
+    this.verb = ctx.createConvolver(); this.verb.buffer = ir; this.verbIn = ctx.createGain(); this.verbIn.gain.value = .32;
+    this.verbIn.connect(this.verb); this.verb.connect(this.music);
+    this.delay = ctx.createDelay(1.5); this.fb = ctx.createGain(); this.fb.gain.value = .3; this.wet = ctx.createGain(); this.wet.gain.value = .18;
+    const damp = ctx.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 2600;
+    this.delay.connect(damp); damp.connect(this.fb); this.fb.connect(this.delay); damp.connect(this.wet); this.wet.connect(this.music);
+    return ctx;
+  },
+  setVolume(v){ this.volume = v; if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, .05); },
+  pop(){
+    const ctx = this.init(); if (!ctx) return; const t = ctx.currentTime, f0 = rand(520, 700);
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 2.3, t + .07);
+    g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(.22, t + .008); g.gain.exponentialRampToValueAtTime(.0001, t + .28);
+    o.connect(g); g.connect(this.comp); g.connect(this.verbIn); o.start(t); o.stop(t + .3);
+    const o2 = ctx.createOscillator(), g2 = ctx.createGain(); o2.type = 'sine'; o2.frequency.setValueAtTime(f0 * 3.01, t + .04);
+    g2.gain.setValueAtTime(.0001, t + .04); g2.gain.linearRampToValueAtTime(.05, t + .05); g2.gain.exponentialRampToValueAtTime(.0001, t + .4);
+    o2.connect(g2); g2.connect(this.verbIn); g2.connect(this.comp); o2.start(t + .04); o2.stop(t + .42);
+  }
+};
+
+/* ---------- synth sketch ---------- */
+const PATTERNS = {
+  synthwave: { kick:[0,8], snare:[4,12], hat:[2,6,10,14], bass:{0:3.6,4:3.6,8:3.6,12:3.6}, arpLen:1.6, density:.55 },
+  lofi:      { kick:[0,7,10], snare:[4,12], hat:[0,4,8,12], bass:{0:6,8:5}, arpLen:2.8, density:.3 },
+  pop:       { kick:[0,8,11], snare:[4,12], hat:[2,6,10,14], bass:{0:2,6:1.5,8:2,14:1.5}, arpLen:1.8, density:.4 },
+  indie:     { kick:[0,8,10], snare:[4,12], hat:[0,4,8,12], bass:{0:3.5,4:3.5,8:3.5,12:3.5}, arpLen:2.2, density:.4 },
+  bass:      { kick:[0,10], snare:[8], hat:[0,4,6,8,12,14], bass:{0:7,10:5}, arpLen:1.4, density:.22 },
+  electronic:{ kick:[0,4,8,12], snare:[4,12], hat:[2,6,10,14], bass:{2:1.5,6:1.5,10:1.5,14:1.5}, arpLen:1.2, density:.5 },
+};
+const PROGS = {
+  minor:[ [{r:0,t:[0,3,7,10]},{r:8,t:[0,4,7,11]},{r:3,t:[0,4,7,11]},{r:10,t:[0,4,7]}], [{r:0,t:[0,3,7]},{r:5,t:[0,3,7,10]},{r:8,t:[0,4,7,11]},{r:7,t:[0,4,7]}] ],
+  major:[ [{r:0,t:[0,4,7,11]},{r:7,t:[0,4,7]},{r:9,t:[0,3,7,10]},{r:5,t:[0,4,7,11]}], [{r:0,t:[0,4,7]},{r:5,t:[0,4,7,11]},{r:9,t:[0,3,7]},{r:7,t:[0,4,7]}] ],
+  jazzy:[ [{r:0,t:[0,4,7,11]},{r:9,t:[0,3,7,10]},{r:2,t:[0,3,7,10]},{r:7,t:[0,4,7,10]}], [{r:5,t:[0,4,7,11]},{r:4,t:[0,3,7,10]},{r:2,t:[0,3,7,10]},{r:0,t:[0,4,7,11]}] ],
+};
+const Synth = {
+  playing:false, paused:false, timer:null, bus:null, send:null,
+  start(track, onEnd){
+    this.stop(); const ctx = A.init(); if (!ctx) return false;
+    this.track = track; this.onEnd = onEnd;
+    this.genre = PATTERNS[track.genre] ? track.genre : 'pop'; this.P = PATTERNS[this.genre];
+    let bpm = track.bpm || 100; while (bpm > 140) bpm /= 2; while (bpm < 60) bpm *= 2;
+    if (this.genre === 'lofi') bpm = clamp(bpm, 66, 84);
+    if (this.genre === 'electronic') bpm = clamp(bpm, 112, 120);
+    if (this.genre === 'bass') bpm = clamp(bpm, 66, 72);
+    this.bpm = bpm; this.sd = 60 / bpm / 4;
+    const rng = mulberry(hashStr(track.id));
+    const kind = this.genre === 'lofi' ? 'jazzy' : this.genre === 'pop' ? 'major' : (this.genre === 'synthwave' || this.genre === 'bass') ? 'minor' : (rng() < .5 ? 'major' : 'minor');
+    const set = PROGS[kind]; this.prog = set[Math.floor(rng() * set.length)];
+    this.root = 45 + Math.floor(rng() * 12);
+    this.arp = Array.from({length:16}, () => Math.floor(rng() * 4));
+    this.oct = Array.from({length:16}, () => rng() < .25);
+    this.mask = Array.from({length:16}, () => rng() < this.P.density);
+    const now = ctx.currentTime;
+    this.bus = ctx.createGain(); this.bus.gain.setValueAtTime(0, now); this.bus.gain.linearRampToValueAtTime(.85, now + .4); this.bus.connect(A.music);
+    this.send = ctx.createGain(); this.send.gain.value = .5; this.send.connect(A.delay); this.send.connect(A.verbIn);
+    A.delay.delayTime.setValueAtTime(this.sd * 3, now);
+    this.step = 0; this.next = now + .06; this.t0 = this.next; this.duration = 30;
+    this.playing = true; this.paused = false; this.pausedAt = 0;
+    this.timer = setInterval(() => this.tick(), 25);
+    return true;
+  },
+  tick(){
+    if (!this.playing || this.paused) return; const ctx = A.ctx;
+    while (this.next < ctx.currentTime + .12){ this.playStep(this.step, this.next); this.next += this.sd; this.step++; }
+    const el = this.elapsed();
+    if (el > this.duration - 3 && !this.fading){ this.fading = true; this.bus.gain.setTargetAtTime(0, ctx.currentTime, .9); }
+    if (el >= this.duration){ const cb = this.onEnd; this.stop(); cb && cb(); }
+  },
+  elapsed(){ if (!this.playing) return 0; if (this.paused) return this.pausedAt; return Math.max(0, A.ctx.currentTime - this.t0); },
+  pause(){ if (!this.playing || this.paused) return; this.pausedAt = this.elapsed(); this.paused = true; const t = A.ctx.currentTime; this.bus.gain.cancelScheduledValues(t); this.bus.gain.setTargetAtTime(0, t, .05); },
+  resume(){ if (!this.paused) return; const t = A.ctx.currentTime; this.paused = false; this.next = t + .05; this.t0 = this.next - this.pausedAt; this.bus.gain.cancelScheduledValues(t); this.bus.gain.setTargetAtTime(.85, t, .1); },
+  seek(sec){
+    if (!this.playing) return; const t = A.ctx.currentTime; sec = clamp(sec, 0, this.duration - .5);
+    this.step = Math.floor(sec / this.sd); this.fading = false;
+    if (this.paused){ this.pausedAt = sec; return; }
+    this.next = t + .05; this.t0 = this.next - sec; this.bus.gain.cancelScheduledValues(t); this.bus.gain.setTargetAtTime(.85, t, .05);
+  },
+  stop(){
+    if (this.timer) clearInterval(this.timer); this.timer = null; this.fading = false;
+    if (this.bus && A.ctx){ const b = this.bus, s = this.send, t = A.ctx.currentTime; b.gain.cancelScheduledValues(t); b.gain.setTargetAtTime(0, t, .12); setTimeout(() => { try { b.disconnect(); s.disconnect(); } catch(e){} }, 900); }
+    this.bus = null; this.send = null; this.playing = false; this.paused = false;
+  },
+  out(node, send){ node.connect(this.bus); if (send) node.connect(this.send); },
+  kick(t){ const c = A.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'sine';
+    o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(52, t + .14);
+    g.gain.setValueAtTime(.75, t); g.gain.exponentialRampToValueAtTime(.0001, t + .45);
+    o.connect(g); this.out(g); o.start(t); o.stop(t + .5); },
+  noise(t, dur, type, freq, peak, q, send){ const c = A.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = A.noiseBuf; s.loop = dur > 1.5; f.type = type; f.frequency.value = freq; if (q) f.Q.value = q;
+    g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    s.connect(f); f.connect(g); this.out(g, send); s.start(t, Math.random() * .5); s.stop(t + dur + .02); },
+  snare(t){ this.noise(t, .22, 'bandpass', 1800, this.genre === 'lofi' ? .1 : .14, .7, true); },
+  hat(t){ this.noise(t, .035, 'highpass', 8000, .03); },
+  bass(t, f, dur){
+    const c = A.ctx, g = this.genre;
+    const cfg = { synthwave:['triangle',900,.42], lofi:['triangle',700,.5], pop:['triangle',1000,.42], indie:['triangle',900,.42], bass:['triangle',650,.55], electronic:['triangle',1100,.4] }[g];
+    const o = c.createOscillator(), fl = c.createBiquadFilter(), gn = c.createGain();
+    o.type = cfg[0]; o.frequency.setValueAtTime(f, t); fl.type = 'lowpass'; fl.frequency.value = cfg[1];
+    gn.gain.setValueAtTime(.0001, t); gn.gain.linearRampToValueAtTime(cfg[2], t + .02);
+    gn.gain.setValueAtTime(cfg[2] * .8, t + Math.max(.04, dur * .6)); gn.gain.exponentialRampToValueAtTime(.0001, t + dur + .1);
+    o.connect(fl); fl.connect(gn); this.out(gn); o.start(t); o.stop(t + dur + .15);
+  },
+  pad(t, ch, dur){
+    const c = A.ctx, g = this.genre, fl = c.createBiquadFilter(), gn = c.createGain(), lvl = .07;
+    fl.type = 'lowpass'; fl.frequency.value = g === 'lofi' ? 1400 : 2000;
+    gn.gain.setValueAtTime(.0001, t); gn.gain.linearRampToValueAtTime(lvl, t + .9);
+    gn.gain.setValueAtTime(lvl, t + dur * .75); gn.gain.linearRampToValueAtTime(.0001, t + dur + .4);
+    for (const iv of ch.t){ const n = this.root + 12 + ch.r + iv;
+      for (const det of [-6, 6]){ const o = c.createOscillator(); o.type = g === 'synthwave' || g === 'electronic' ? 'sawtooth' : 'triangle'; o.frequency.value = mtof(n); o.detune.value = det; o.connect(fl); o.start(t); o.stop(t + dur + .5); } }
+    fl.connect(gn); this.out(gn, true);
+    if (g === 'lofi') this.noise(t, dur, 'bandpass', 2600, .012, .4);
+  },
+  lead(t, f, dur){
+    const c = A.ctx, g = this.genre, o = c.createOscillator(), gn = c.createGain(), lvl = g === 'lofi' ? .16 : .13;
+    o.type = 'sine'; o.frequency.value = f;
+    gn.gain.setValueAtTime(.0001, t); gn.gain.linearRampToValueAtTime(lvl, t + .01); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(gn); this.out(gn, true); o.start(t); o.stop(t + dur + .05);
+    const o2 = c.createOscillator(), g2 = c.createGain(); o2.type = 'sine'; o2.frequency.value = f * 2;
+    g2.gain.setValueAtTime(.0001, t); g2.gain.linearRampToValueAtTime(lvl * .22, t + .006); g2.gain.exponentialRampToValueAtTime(.0001, t + dur * .35);
+    o2.connect(g2); this.out(g2, true); o2.start(t); o2.stop(t + dur);
+  },
+  playStep(s, t){
+    const P = this.P, st = s % 16, bar = Math.floor(s / 16), ch = this.prog[bar % 4], sd = this.sd;
+    if (this.genre === 'lofi' && st % 2 === 1) t += sd * .3;
+    if (bar > 0){ if (P.kick.includes(st)) this.kick(t); if (P.snare.includes(st)) this.snare(t); if (P.hat.includes(st)) this.hat(t); }
+    const bl = P.bass[st]; if (bl) this.bass(t, mtof(this.root + ch.r), sd * bl);
+    if (st === 0) this.pad(t, ch, sd * 16);
+    if (this.mask[st]){ const tones = ch.t, n = this.root + 12 + ch.r + tones[this.arp[st] % tones.length] + (this.oct[st] ? 12 : 0); this.lead(t, mtof(n), sd * P.arpLen); }
+  }
+};
+
+/* ---------- real 30s preview clips ---------- */
+const Preview = {
+  el:null,
+  start(url, onEnd, onFail){
+    const ctx = A.init();
+    if (!this.el){ this.el = new Audio(); this.el.crossOrigin = 'anonymous'; if (ctx){ try { ctx.createMediaElementSource(this.el).connect(A.music); } catch(e){} } }
+    const el = this.el; let failed = false; const fail = () => { if (failed) return; failed = true; el.onerror = null; onFail && onFail(); };
+    el.onended = () => onEnd && onEnd(); el.onerror = fail; el.src = url; el.currentTime = 0;
+    const p = el.play(); if (p && p.catch) p.catch(fail);
+  },
+  stop(){ if (!this.el) return; this.el.onerror = null; this.el.onended = null; this.el.pause(); this.el.removeAttribute('src'); try { this.el.load(); } catch(e){} }
+};
+
+/* ---------- Spotify embed player ---------- */
+const Embed = {
+  ctrl:null, ready:false, failed:false, pending:null, wantPlay:false, endedFired:false, st:{ pos:0, dur:30000, paused:true },
+  load(){
+    window.onSpotifyIframeApiReady = (API) => {
+      try { API.createController(document.getElementById('embed'), { width:'100%', height:80, uri:'spotify:track:' + MOCK[0].id }, (c) => {
+        this.ctrl = c; this.ready = true;
+        c.addListener('ready', () => { if (this.wantPlay){ this.wantPlay = false; try { c.play(); } catch(e){} } });
+        c.addListener('playback_update', e => { const d = e.data || {}; this.st = { pos:d.position || 0, dur:d.duration || 30000, paused:!!d.isPaused };
+          if (!this.st.paused) Player.clearTap();
+          if (Player.mode === 'embed'){ if (!this.st.paused) this.endedFired = false;
+            if (this.st.paused && this.st.pos > 1000 && this.st.pos >= this.st.dur - 600 && !this.endedFired){ this.endedFired = true; Player.ended(); } } });
+        if (this.pending){ const p = this.pending; this.pending = null; this.play(p); }
+      }); } catch(e){ this.fail(); }
+    };
+    const s = document.createElement('script'); s.src = 'https://open.spotify.com/embed/iframe-api/v1'; s.async = true;
+    s.onerror = () => this.fail(); document.head.appendChild(s);
+    setTimeout(() => { if (!this.ready) this.fail(); }, 8000);
+  },
+  fail(){
+    if (this.failed || this.ready) return; this.failed = true;
+    if (state.source === 'spotify') setSource('preview', false);
+    document.querySelectorAll('[data-src="spotify"]').forEach(b => { b.disabled = true; b.title = "Spotify's player can't load in this preview"; });
+    $('#sandboxNote').hidden = false;
+    if (this.pending){ const p = this.pending; this.pending = null;
+      if (Player.track && Player.track.id === p.id){ Player.play(p, true); toast("Spotify's player can't load here, so you're hearing a sketch."); } }
+  },
+  play(track){
+    if (this.failed) return false;
+    if (!this.ready){ this.pending = track; return true; }
+    this.wantPlay = true; this.endedFired = false; this.st = { pos:0, dur:30000, paused:true };
+    try { this.ctrl.loadUri('spotify:track:' + track.id); } catch(e){}
+    clearTimeout(this.pt); this.pt = setTimeout(() => { if (this.wantPlay){ this.wantPlay = false; try { this.ctrl.play(); } catch(e){} } }, 1600);
+    clearTimeout(this.nt); this.nt = setTimeout(() => { if (Player.mode === 'embed' && Player.track && Player.track.id === track.id && this.st.paused && this.st.pos < 500) Player.needTap(); }, 3500);
+    return true;
+  },
+  toggle(){ if (this.ctrl) try { this.ctrl.togglePlay(); } catch(e){} },
+  pause(){ this.pending = null; this.wantPlay = false; if (this.ctrl && !this.st.paused) try { this.ctrl.pause(); } catch(e){} }
+};
+
+/* ---------- full songs in this browser (Spotify Web Playback SDK, Premium) ---------- */
+const WPS = {
+  player:null, id:null, ready:false, failed:false, loading:false, track:null, endedFired:false,
+  st:{ pos:0, dur:200000, paused:true, at:0 },
+  load(){
+    if (this.loading || this.failed || !(Spotify.kind === 'pkce' && Spotify.token) || !/^https?:$/.test(location.protocol)) return;
+    this.loading = true;
+    window.onSpotifyWebPlaybackSDKReady = () => this.boot();
+    const sc = document.createElement('script'); sc.src = 'https://sdk.scdn.co/spotify-player.js'; sc.async = true; sc.onerror = () => { this.failed = true; }; document.head.appendChild(sc);
+  },
+  boot(){
+    const SP = window.Spotify; if (!SP || !SP.Player){ this.failed = true; return; }
+    const pl = this.player = new SP.Player({ name:'Bubble Beats', volume:A.volume != null ? A.volume : .8,
+      getOAuthToken: cb => Spotify.ensure().then(() => cb(Spotify.token)).catch(() => {}) });
+    pl.addListener('ready', ({ device_id }) => { this.id = device_id; this.ready = true; if (store.get('bb.src3', 'spotify') === 'spotify' && state.source !== 'spotify') setSource('spotify', false); UI.note(); toast('Full songs ready in this browser'); });
+    pl.addListener('not_ready', () => { this.ready = false; });
+    pl.addListener('authentication_error', () => { this.ready = false; this.failed = true; toast('Log in to Spotify again to play full songs'); });
+    pl.addListener('account_error', () => { this.ready = false; this.failed = true; toast('Full songs need Spotify Premium'); });
+    pl.addListener('initialization_error', () => { this.ready = false; this.failed = true; });
+    pl.addListener('playback_error', () => {});
+    pl.addListener('player_state_changed', st => this.onState(st));
+    pl.connect();
+  },
+  same(t, tr){ return t && tr && (t.id === tr.id || (t.linked_from && t.linked_from.id === tr.id) || t.uri === 'spotify:track:' + tr.id); },
+  onState(st){
+    if (!st || !this.track) return;
+    this.st = { pos:st.position || 0, dur:st.duration || this.st.dur, paused:st.paused, at:performance.now() };
+    const prev = (st.track_window && st.track_window.previous_tracks) || [];
+    if (!this.endedFired && st.paused && st.position === 0 && prev.some(t => this.same(t, this.track))){ this.endedFired = true; Player.ended(); }
+  },
+  now(){ const s = this.st; return s.paused ? s.pos : Math.min(s.dur, s.pos + (performance.now() - s.at)); },
+  play(track){
+    this.track = track; this.endedFired = false; this.st = { pos:0, dur:track.dur || 200000, paused:false, at:performance.now() };
+    Spotify.api('/me/player/play?device_id=' + encodeURIComponent(this.id), { method:'PUT', body:{ uris:['spotify:track:' + track.id] } })
+      .catch(e => { if (Player.track !== track) return;
+        if (e.status === 403){ this.failed = true; toast('Full songs need Spotify Premium'); } else { this.ready = false; toast('Switching to the Spotify preview player'); }
+        Player.play(track); });
+  },
+  toggle(){ if (!this.player) return; this.st = { pos:this.now(), dur:this.st.dur, paused:!this.st.paused, at:performance.now() }; this.player.togglePlay().catch(() => {}); },
+  pause(){ if (this.player && this.ready) this.player.pause().catch(() => {}); },
+  seek(sec){ if (!this.player) return; const ms = Math.max(0, Math.round(sec * 1000)); this.st = { pos:ms, dur:this.st.dur, paused:this.st.paused, at:performance.now() }; this.player.seek(ms).catch(() => {}); },
+  volume(v){ if (this.player) this.player.setVolume(Math.max(0, Math.min(1, v))).catch(() => {}); }
+};
+
+/* ---------- player ---------- */
+const Player = {
+  track:null, mode:'none',
+  play(track, forceLocal){
+    const wasSdk = this.mode === 'sdk';
+    this.stopAll(); this.track = track; A.init();
+    if (state.source === 'spotify' && WPS.ready && !WPS.failed && !forceLocal){ this.mode = 'sdk'; WPS.play(track); }
+    else if (state.source === 'spotify' && !Embed.failed && !forceLocal){ if (wasSdk) WPS.pause(); this.mode = 'embed'; Embed.play(track); }
+    else if (track.preview){ this.mode = 'preview';
+      Preview.start(track.preview, () => this.ended(), () => { if (this.track === track){ this.mode = 'synth'; Synth.start(track, () => this.ended()); UI.note(); } }); }
+    else { this.mode = 'synth'; Synth.start(track, () => this.ended()); }
+    UI.showTrack(track);
+  },
+  stopAll(){ Synth.stop(); Preview.stop(); Embed.pause(); if (this.mode === 'sdk' && state.source !== 'spotify') WPS.pause(); this.clearTap(); },
+  needTap(){
+    setOpen(true, false); $('#embedWrap').classList.add('needs-tap');
+    const n = $('#pNote'); n.classList.add('tap'); n.textContent = 'Your browser needs one tap: press play inside the outlined Spotify player. After that, pops start songs on their own.';
+  },
+  clearTap(){ $('#embedWrap').classList.remove('needs-tap'); const n = $('#pNote'); if (n.classList.contains('tap')){ n.classList.remove('tap'); UI.note(); } },
+  toggle(){
+    unlockAudio();
+    if (!this.track) return nextTrack();
+    if (this.mode === 'sdk') return WPS.toggle();
+    if (this.mode === 'embed') return Embed.toggle();
+    if (this.mode === 'preview'){ const el = Preview.el; if (el.paused) el.play().catch(() => {}); else el.pause(); return; }
+    if (this.mode === 'synth'){ if (!Synth.playing) Synth.start(this.track, () => this.ended()); else if (Synth.paused) Synth.resume(); else Synth.pause(); return; }
+    this.play(this.track);
+  },
+  isPaused(){
+    if (this.mode === 'sdk') return WPS.st.paused;
+    if (this.mode === 'embed') return Embed.st.paused;
+    if (this.mode === 'preview') return !Preview.el || Preview.el.paused;
+    if (this.mode === 'synth') return !Synth.playing || Synth.paused;
+    return true;
+  },
+  progress(){
+    if (this.mode === 'sdk') return { pos:WPS.now() / 1000, dur:WPS.st.dur / 1000 };
+    if (this.mode === 'embed') return { pos:Embed.st.pos / 1000, dur:Embed.st.dur / 1000 };
+    if (this.mode === 'preview' && Preview.el) return { pos:Preview.el.currentTime || 0, dur:Preview.el.duration || 30 };
+    if (this.mode === 'synth') return { pos:Synth.elapsed(), dur:30 };
+    return { pos:0, dur:30 };
+  },
+  seek(sec){
+    if (!this.track) return;
+    if (this.mode === 'sdk') return WPS.seek(sec);
+    if (this.mode === 'embed'){ try { Embed.ctrl && Embed.ctrl.seek(sec); } catch(e){} return; }
+    if (this.mode === 'preview' && Preview.el){ try { Preview.el.currentTime = sec; } catch(e){} return; }
+    if (this.mode === 'synth'){ if (!Synth.playing) Synth.start(this.track, () => this.ended()); Synth.seek(sec); }
+  },
+  ended(){
+    if (state.queue.length){ const q = state.queue.shift(); setTimeout(() => playNow(q.t, q.why), 500); return; }
+    if (state.autopop) state.autoNext = Math.min(state.autoNext, performance.now() + 1200);
+  }
+};
+
+/* ---------- Spotify Web API ---------- */
+const Spotify = {
+  token:null, exp:0, kind:null, refresh:null, clientId:store.get('bb.clientId', '') || '91a5956be4cc4c4f80f39572cb3e3475',
+  redirectUri(){ return location.origin + location.pathname.replace(/index\.html$/, ''); },
+  canRedirect(){ return /^https?:$/.test(location.protocol); },
+  randStr(n){ const a = new Uint8Array(n); crypto.getRandomValues(a); const cs = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'; return Array.from(a, x => cs[x % cs.length]).join(''); },
+  b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
+  async pkceStart(id){
+    if (!id) return toast('Paste your Client ID first.');
+    if (!this.canRedirect()) return toast('Serve this page over http(s) to log in, or use Client Credentials.');
+    if (!window.crypto || !crypto.subtle) return toast('Login needs a secure page (https or localhost).');
+    const verifier = this.randStr(64); store.set('bb.verifier', verifier); store.set('bb.clientId', id); this.clientId = id;
+    if (Entry.isOpen() && Entry.step === 'host') store.set('bb.pendingHost', { name:$('#partyName').value, allowSkip:$('#hostSkip').checked, noExplicit:$('#hostExplicit').checked });
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    const p = new URLSearchParams({ client_id:id, response_type:'code', redirect_uri:this.redirectUri(), code_challenge_method:'S256', code_challenge:this.b64url(digest), scope:'user-top-read user-library-read user-library-modify user-read-private playlist-modify-private streaming user-read-email user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative' });
+    location.href = 'https://accounts.spotify.com/authorize?' + p.toString();
+  },
+  async handleRedirect(){
+    const q = new URLSearchParams(location.search);
+    if (q.get('error')){ history.replaceState({}, '', this.redirectUri()); toast('Spotify login was cancelled.'); return false; }
+    const code = q.get('code'); if (!code) return false;
+    history.replaceState({}, '', this.redirectUri());
+    const body = new URLSearchParams({ grant_type:'authorization_code', code, redirect_uri:this.redirectUri(), client_id:store.get('bb.clientId',''), code_verifier:store.get('bb.verifier','') });
+    const r = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+    store.del('bb.verifier'); if (!r.ok) throw new Error('Spotify login failed (' + r.status + '). Try again.');
+    this.setToken(await r.json(), 'pkce'); return true;
+  },
+  async clientCredentials(id, secret){
+    if (!id || !secret) return toast('Add both the Client ID and Client Secret.');
+    let r;
+    try { r = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded', 'Authorization':'Basic ' + btoa(id + ':' + secret) }, body:new URLSearchParams({ grant_type:'client_credentials' }) }); }
+    catch(e){ throw new Error("Couldn't reach Spotify. Open the page in your own browser to connect."); }
+    if (!r.ok) throw new Error('Spotify rejected those credentials (' + r.status + '). Check the ID and secret.');
+    store.set('bb.clientId', id); this.clientId = id; this.setToken(await r.json(), 'cc');
+  },
+  setToken(j, kind){ state.spotLost = false; this.lostTold = false; this.token = j.access_token; this.exp = Date.now() + ((j.expires_in || 3600) - 60) * 1000; this.kind = kind; if (j.refresh_token) this.refresh = j.refresh_token;
+    store.set('bb.auth', { token:this.token, exp:this.exp, kind:this.kind, refresh:this.refresh }); },
+  restore(){ const a = store.get('bb.auth', null); if (a) Object.assign(this, a); return !!a; },
+  async ensure(){
+    if (this.token && Date.now() < this.exp) return true;
+    if (this.kind === 'pkce' && this.refresh){
+      const r = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams({ grant_type:'refresh_token', refresh_token:this.refresh, client_id:this.clientId }) });
+      if (r.ok){ this.setToken(await r.json(), 'pkce'); return true; }
+    }
+    return false;
+  },
+  async api(path, opts){
+    if (!(await this.ensure())){ this.lost(); throw new Error('Your Spotify session expired. Connect again.'); }
+    const o = opts || {}, headers = { Authorization:'Bearer ' + this.token };
+    if (o.body) headers['Content-Type'] = 'application/json';
+    const r = await fetch('https://api.spotify.com/v1' + path, { method:o.method || 'GET', headers, body:o.body ? JSON.stringify(o.body) : undefined });
+    if (r.status === 401){ this.lost(); throw new Error('Your Spotify session expired. Connect again.'); }
+    if (!r.ok){ const er = new Error('Spotify returned an error (' + r.status + ').'); er.status = r.status; throw er; }
+    const tx = await r.text(); return tx ? JSON.parse(tx) : {};
+  },
+  // the session dropped: say so once, keep the songs already loaded, and point to the profile to reconnect
+  lost(){
+    if (!this.token && !store.get('bb.auth', null)) return;
+    this.token = null; this.exp = 0; store.del('bb.auth'); state.spotLost = true;
+    if (!this.lostTold){ this.lostTold = true; toast('Spotify disconnected. Reconnect from your profile, top right.'); }
+    updateStatus();
+  },
+  async fetchMoment(mk){
+    const STYLE = { arrivals:'lofi', warmup:'indie', dance:'electronic', singalong:'pop', throwback:'synthwave', wind:'lofi' };
+    const qs = M[mk].q, q = qs[Math.floor(Math.random() * qs.length)], market = this.kind === 'pkce' ? 'from_token' : 'US';
+    const j = await this.api(`/search?q=${encodeURIComponent(q)}&type=track&limit=10&offset=${Math.floor(Math.random() * 30)}&market=${market}`);
+    return ((j.tracks && j.tracks.items) || []).filter(Boolean).map(it => { const imgs = (it.album && it.album.images) || [];
+      return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:STYLE[mk], m:[mk], cover:(imgs[1] || imgs[0] || {}).url || null,
+        preview:it.preview_url || null, live:true, ex:it.explicit, why:`Spotify pick for ${M[mk].label}`, url:(it.external_urls && it.external_urls.spotify) || null }); });
+  },
+  // Spotify no longer exposes energy or danceability, so moments come from artist genres and release year
+  momentsOf(list, year){
+    const g = (list || []).join(' ').toLowerCase(), m = [];
+    if (year && year < 2006) m.push('throwback');
+    if (/chill|ambient|acoustic|lo-?fi|sleep|piano|downtempo|dream/.test(g)) m.push('wind');
+    if (/soul|jazz|r&b|folk|bossa|neo/.test(g)) m.push('arrivals');
+    if (/house|edm|dance|techno|reggaeton|disco|trap|hip hop|rap|electro|latin/.test(g)) m.push('dance');
+    if (/indie|alternative|funk|nu disco|garage/.test(g)) m.push('warmup');
+    if (/pop|rock|anthem/.test(g) && !m.includes('dance')) m.push('singalong');
+    if (!m.length) m.push('warmup');
+    return m;
+  },
+  genreOf(list){
+    const g = (list || []).join(' ').toLowerCase();
+    if (/synthwave|retrowave|outrun|synth-?pop|new wave|darkwave/.test(g)) return 'synthwave';
+    if (/lo-?fi|chill|jazz|soul|r&b|neo|bedroom|ambient|downtempo/.test(g)) return 'lofi';
+    if (/dubstep|trap|bass|drill|hip hop|rap|grime|phonk/.test(g)) return 'bass';
+    if (/house|techno|edm|electro|dance|trance|disco|garage|drum and bass/.test(g)) return 'electronic';
+    if (/indie|rock|alternative|folk|punk|shoegaze|grunge|emo/.test(g)) return 'indie';
+    return 'pop';
+  },
+  async loadMine(){
+    const me = await this.api('/me').catch(() => null);
+    const [top, saved] = await Promise.allSettled([this.api('/me/top/tracks?limit=50&time_range=medium_term'), this.api('/me/tracks?limit=50')]);
+    const items = [], seen = new Set();
+    if (top.status === 'fulfilled') (top.value.items || []).forEach(t => items.push([t, 'From your top tracks']));
+    if (saved.status === 'fulfilled') (saved.value.items || []).forEach(x => items.push([x.track, 'From your liked songs']));
+    const tracks = items.filter(([it]) => it && it.id && !seen.has(it.id) && seen.add(it.id));
+    this.me = me;
+    if (!tracks.length) return null;
+    const artistIds = [...new Set(tracks.map(([t]) => t.artists && t.artists[0] && t.artists[0].id).filter(Boolean))], genres = {};
+    await Promise.all(artistIds.slice(0, 60).map(id => this.api('/artists/' + id).then(a => { if (a && a.id) genres[a.id] = a.genres || []; }).catch(() => {})));
+    return tracks.map(([it, why]) => { const imgs = (it.album && it.album.images) || [], a0 = it.artists && it.artists[0];
+      const year = parseInt(((it.album && it.album.release_date) || '').slice(0, 4), 10) || 0;
+      return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:this.genreOf(a0 && genres[a0.id]), m:this.momentsOf(a0 && genres[a0.id], year),
+        cover:(imgs[1] || imgs[0] || {}).url || null, preview:it.preview_url || null, live:true, ex:it.explicit, why, url:(it.external_urls && it.external_urls.spotify) || null }); });
+  },
+  async loadAll(){
+    UI.connState('Fetching fresh tracks…');
+    if (this.kind === 'pkce'){
+      const mine = await this.loadMine().catch(() => null);
+      if (mine && mine.length){ state.pool = mine; state.live = true; state.mine = true; updateStatus();
+        toast(`Loaded ${mine.length} of your songs${this.me && this.me.display_name ? ', ' + this.me.display_name : ''}.`); return; }
+    }
+    const res = await Promise.allSettled(MOMENTS.map(m => this.fetchMoment(m.key)));
+    const seen = new Set(), tracks = [];
+    res.forEach(r => { if (r.status === 'fulfilled') r.value.forEach(t => { if (!seen.has(t.id)){ seen.add(t.id); tracks.push(t); } }); });
+    if (!tracks.length){ const err = res.find(r => r.status === 'rejected'); throw err ? err.reason : new Error('Spotify returned no tracks.'); }
+    state.pool = tracks; state.live = true; updateStatus();
+    const withPrev = tracks.filter(t => t.preview).length;
+    toast(`Connected. ${tracks.length} live tracks${withPrev ? `, ${withPrev} with clips` : ''}.`);
+  },
+  disconnect(){ this.token = null; this.exp = 0; this.kind = null; this.refresh = null; this.me = null; state.spotLost = false; store.del('bb.auth'); state.pool = MOCK.slice(); state.live = false; state.mine = false; updateStatus(); toast('Disconnected. Back to the party library.'); }
+};
+
+/* ---------- canvas world ---------- */
+const cv = $('#stage'), cx = cv.getContext('2d');
+const dock = $('#dock'), coreOrb = $('#coreOrb'), chargeC = $('#chargeC');
+const CHARGE_LEN = 226.2;
+let W = 0, H = 0, DPR = 1, time = 0, motes = [], spawnTimer = 0, fontsVersion = 0;
+const bubbles = [], particles = [], rings = [];
+const portal = { x:0, y:0, r:20, flash:0, charge:0 };
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const topLimit = () => (W < 760 ? 148 : 80);
+
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  motes = Array.from({ length:Math.round(W * H / 24000) }, () => ({ x:Math.random() * W, y:Math.random() * H, r:rand(.6, 1.6), sp:rand(.15, .45), ph:Math.random() * TAU }));
+  computePortal(); sizeSpectrum();
+}
+// the Sound Core sits in the player bar; bubbles rise from it and float above the dock
+let lastQr = null;
+function computePortal(){
+  const o = coreOrb.getBoundingClientRect(), d = dock.getBoundingClientRect();
+  if (o.width){ portal.x = o.left + o.width / 2; portal.y = o.top + o.height / 2; }
+  state.floor = Math.max(Math.min(d.top || H - 100, o.top || H) - 6, topLimit() + 140);
+  const ch = document.getElementById('chips').getBoundingClientRect(); state.left = W >= 761 && ch.width ? ch.right + 6 : 0; // bubbles stay clear of the moments list
+  state.right = W >= 761 && dock.classList.contains('open') ? W - 392 - 16 : W; // and of the player drawer
+  const qr = state.right < W ? '392px' : '0px'; if (qr !== lastQr){ lastQr = qr; document.documentElement.style.setProperty('--qr', qr); }
+}
+const bubbleBase = () => Math.min(W, H) < 640 ? 40 : W > 1200 ? 58 : 52;
+const maxBubbles = () => clamp(Math.floor(W * (state.floor - topLimit()) / 48000), 5, 20);
+const spawnInterval = () => 6 - (state.spawnLevel - 1) * .55;
+const matches = t => (state.filter === 'all' || (t.m || []).includes(state.filter)) && !(state.noExplicit && t.ex);
+
+function pickTrack(){
+  const base = state.pool.filter(t => !state.nope.has(t.id) && !(state.noExplicit && t.ex));
+  let pool = base.filter(matches); if (!pool.length) pool = base.length ? base : state.pool;
+  const on = new Set(bubbles.filter(b => b.state === 'alive').map(b => b.track.id));
+  let cand = pool.filter(t => !on.has(t.id) && !state.recent.includes(t.id));
+  if (!cand.length) cand = pool.filter(t => !on.has(t.id)); if (!cand.length) cand = pool;
+  const t = cand[Math.floor(Math.random() * cand.length)];
+  state.recent.push(t.id); if (state.recent.length > Math.min(8, Math.floor(pool.length / 2))) state.recent.shift();
+  return t;
+}
+class Bubble {
+  constructor(track, replay){
+    this.track = track; this.replay = !!replay; this.tag = typeof replay === 'string' ? replay : 'REPLAY';
+    this.why = replay ? ({ PICKED:'You searched for this', SAVED:'From your saved songs', REPLAY:'Released again from your library' })[this.tag] || null : null;
+    const base = bubbleBase();
+    this.r = (base + Math.random() * base * .35) * (replay ? 1.1 : 1);
+    this.x = portal.x + rand(-4, 4); this.y = portal.y - portal.r * .3; this.drawX = this.x;
+    const spread = W > 900 ? 1.1 : .6, a = -Math.PI / 2 + rand(-spread, spread), sp = rand(3.2, 4.6);
+    this.vx = Math.cos(a) * sp; this.vy = Math.sin(a) * sp;
+    this.phase = Math.random() * TAU; this.born = time; this.life = replay ? 90 : rand(26, 38);
+    this.sp = 0; this.scaleE = 0; this.state = 'alive'; this.fade = 1; this.hover = 0; this.target = 0; this.txt = null;
+    getCover(track);
+  }
+}
+function spawn(track, replay){
+  const alive = bubbles.filter(b => b.state === 'alive');
+  if (alive.length >= maxBubbles()){ const old = alive.filter(b => !b.replay && b !== state.autoTarget).sort((a, b) => a.born - b.born)[0]; if (old) old.state = 'fading'; }
+  const b = new Bubble(track || pickTrack(), replay); bubbles.push(b);
+  portal.flash = replay ? 1.4 : 1; spawnTimer = 0; return b;
+}
+/* search: the party library, plus Spotify when you're connected */
+const Search = {
+  items:[], active:-1, seq:0, timer:null,
+  local(q){
+    const n = q.toLowerCase(), seen = new Set(), out = [];
+    for (const t of state.pool.concat(MOCK)){
+      if (seen.has(t.id)) continue;
+      const hay = (t.title + ' ' + t.artist).toLowerCase();
+      if (hay.includes(n)){ seen.add(t.id); out.push(t); }
+    }
+    return out.sort((a, b) => (b.title.toLowerCase().startsWith(n) - a.title.toLowerCase().startsWith(n))).slice(0, 8);
+  },
+  async remote(q){
+    if (!Spotify.token) return [];
+    const market = Spotify.kind === 'pkce' ? 'from_token' : 'US';
+    const j = await Spotify.api(`/search?q=${encodeURIComponent(q)}&type=track&limit=8&market=${market}`);
+    return ((j.tracks && j.tracks.items) || []).filter(Boolean).map(it => { const imgs = (it.album && it.album.images) || [];
+      const year = parseInt(((it.album && it.album.release_date) || '').slice(0, 4), 10) || 0;
+      return makeTrack({ id:it.id, title:it.name, artist:(it.artists || []).map(a => a.name).join(', '), genre:'pop', m:year && year < 2006 ? ['throwback'] : [],
+        cover:(imgs[2] || imgs[1] || imgs[0] || {}).url || null, preview:it.preview_url || null, live:true, ex:it.explicit, url:(it.external_urls && it.external_urls.spotify) || null }); });
+  },
+  run(q){
+    q = q.trim(); $('#search').classList.toggle('has-q', !!q);
+    clearTimeout(this.timer);
+    if (!q){ this.close(); return; }
+    const local = this.local(q); this.render(q, local, null, !!Spotify.token);
+    if (Spotify.token){
+      const my = ++this.seq;
+      this.timer = setTimeout(async () => {
+        let rem = []; try { rem = await this.remote(q); } catch(e){}
+        if (my === this.seq) this.render(q, local, rem, false);
+      }, 280);
+    }
+  },
+  render(q, local, remote, loading){
+    const box = $('#results'), ids = new Set(local.map(t => t.id));
+    const rem = (remote || []).filter(t => !ids.has(t.id));
+    this.items = local.concat(rem); this.active = this.items.length ? 0 : -1;
+    const row = (t, i) => `<button class="r-item${i === this.active ? ' active' : ''}" role="option" data-i="${i}">
+      <img src="${esc(coverSrc(t))}" alt=""><span class="h-meta"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></span>
+      ${t.m && t.m.length ? `<span class="r-tag">${esc(momentLabel(t))}</span>` : ''}</button>`;
+    let html = '';
+    if (local.length) html += `<div class="r-head">Party library</div>` + local.map((t, i) => row(t, i)).join('');
+    if (rem.length) html += `<div class="r-head">Spotify</div>` + rem.map((t, i) => row(t, local.length + i)).join('');
+    if (!this.items.length) html += `<div class="r-empty">${loading ? 'Searching Spotify…' : `No songs match “${esc(q)}”.`}</div>`;
+    else if (loading) html += `<div class="r-empty">Searching Spotify…</div>`;
+    if (!Spotify.token) html += `<div class="r-foot">Searching the party library. Connect Spotify from your profile, top right, to search every song.</div>`;
+    box.innerHTML = html; box.hidden = false; $('#q').setAttribute('aria-expanded', 'true');
+  },
+  move(d){
+    if (!this.items.length) return;
+    this.active = (this.active + d + this.items.length) % this.items.length;
+    document.querySelectorAll('.r-item').forEach(el => el.classList.toggle('active', +el.dataset.i === this.active));
+    const el = document.querySelector(`.r-item[data-i="${this.active}"]`); if (el) el.scrollIntoView({ block:'nearest' });
+  },
+  pick(i){
+    const t = this.items[i]; if (!t) return;
+    unlockAudio(); spawn(t, 'PICKED'); state.hintOut = true;
+    toast(`${t.title} is floating up. Pop it to play.`);
+    $('#q').value = ''; this.run(''); $('#q').blur();
+  },
+  close(){ $('#results').hidden = true; $('#q').setAttribute('aria-expanded', 'false'); this.items = []; this.active = -1; }
+};
+function replay(track, tag){ if (!track) return; unlockAudio(); spawn(track, tag || true); toast(`Released again: ${track.title}`); if (W < 760) toggleHistory(false); }
+
+function burst(b){
+  const cols = [T.ink, T.accent, T.accentHi], R = b.r * b.scaleE;
+  for (let i = 0; i < 46; i++){
+    const a = Math.random() * TAU, sp = rand(.9, 3.8), type = i % 6 === 0 ? 'spark' : i % 6 === 1 ? 'confetti' : 'dot';
+    particles.push({ x:b.drawX + Math.cos(a) * R * .7, y:b.y + Math.sin(a) * R * .7, vx:Math.cos(a) * sp, vy:Math.sin(a) * sp,
+      life:1, decay:rand(.007, .014), size:type === 'confetti' ? rand(3, 5.5) : type === 'spark' ? rand(3, 5) : rand(1.4, 3.2), color:cols[i % cols.length], type, rot:Math.random() * TAU, vr:rand(-.06, .06) });
+  }
+  rings.push({ x:b.drawX, y:b.y, r:R * .9, max:R * 2.5, life:1, color:T.ink, w:1.6 });
+  rings.push({ x:b.drawX, y:b.y, r:R * .6, max:R * 1.8, life:1, color:T.accent, w:1.4, delay:.12 });
+}
+function puff(b){
+  const R = b.r * b.scaleE;
+  for (let i = 0; i < 12; i++){ const a = Math.random() * TAU, sp = rand(.3, 1.2);
+    particles.push({ x:b.drawX + Math.cos(a) * R * .8, y:b.y + Math.sin(a) * R * .8, vx:Math.cos(a) * sp, vy:Math.sin(a) * sp, life:.7, decay:rand(.012, .02), size:rand(1, 2.2), color:T.ink, type:'dot', rot:0, vr:0 }); }
+}
+function oldestBubble(){ return bubbles.filter(x => x.state === 'alive' && x.sp >= 1 && matches(x.track) && x.y < state.floor).sort((a, c) => a.born - c.born)[0]; }
+// Spotify-style previous: restart if more than 3s in, otherwise step back through what you popped
+function prevTrack(){
+  unlockAudio();
+  if (!canSkip()) return skipToast();
+  if (Player.track && Player.progress().pos > 3){ Player.seek(0); return; }
+  const i = state.cursor + (Player.track ? 1 : 0), h = state.history[i];
+  if (!h){ if (Player.track) Player.seek(0); return; }
+  state.cursor = i; state.nowWhy = 'Played earlier'; Player.play(h); updateNav();
+}
+// next: step forward through history, or pop the next bubble on screen
+function nextTrack(){
+  unlockAudio();
+  if (!canSkip()) return skipToast();
+  if (Player.track && state.cursor > 0){ state.cursor--; state.nowWhy = 'Played earlier'; Player.play(state.history[state.cursor]); updateNav(); return; }
+  if (state.queue.length){ const q = state.queue.shift(); playNow(q.t, q.why); return; }
+  const b = oldestBubble(); if (b) popBubble(b, false, true); else { const nb = spawn(); setTimeout(() => popBubble(nb, false, true), 1300); }
+}
+function updateNav(){
+  const ok = canSkip();
+  $('#prevBtn').disabled = (!Player.track && !state.history.length) || !ok;
+  $('#nextBtn').disabled = !ok;
+}
+function popBubble(b, auto, force){
+  if (!b || b.state === 'popped' || b.state === 'clearing') return;
+  if (!auto) unlockAudio();
+  b.state = 'popped'; const i = bubbles.indexOf(b); if (i > -1) bubbles.splice(i, 1);
+  if (state.hover === b) state.hover = null;
+  burst(b); A.pop();
+  // guests add to the host's queue; the host (or anyone exploring) plays straight away
+  if (Party.role === 'guest' && !force && Player.track && !Player.isPaused()){
+    queueTrack(b.track, b.why);
+  } else playNow(b.track, b.why || whyOf(b.track));
+  if (!auto && !store.get('bb.dragTip', false)){ store.set('bb.dragTip', true); setTimeout(() => toast('Tip: drag a bubble to the right edge to queue it, or flick it away to skip.'), 2600); }
+  if (Embed.failed && !state.toldNoSpotify){ state.toldNoSpotify = true; toast("Spotify can't play inside this preview, so this is a sketch. Open the page in your browser for the real songs."); }
+  setTimeout(soundCheck, 900);
+  state.hintOut = true;
+  state.autoNext = performance.now() + AUTO_MS; state.autoTarget = null;
+}
+function clearScreen(){
+  let k = 0; bubbles.forEach(b => { if (b.state !== 'popped'){ b.state = 'clearing'; b.clearAt = time + (k++) * .06; } });
+  state.autoTarget = null; toast(k ? 'Bubbles cleared' : 'Nothing to clear yet');
+}
+
+/* drawing */
+function drawBackground(){
+  cx.fillStyle = T.bg; cx.fillRect(0, 0, W, H);
+  const m = Math.max(W, H);
+  let g = cx.createRadialGradient(W * .15, H * .08, 0, W * .15, H * .08, m * .6);
+  g.addColorStop(0, rgba(T.accent, .08)); g.addColorStop(1, rgba(T.accent, 0));
+  cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+  g = cx.createRadialGradient(portal.x, state.floor, 0, portal.x, state.floor, m * .42);
+  g.addColorStop(0, rgba(T.accent, .16 + state.energy * .22 + portal.flash * .06)); g.addColorStop(1, rgba(T.accent, 0));
+  cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+  for (const p of motes){ const a = .05 + .1 * (Math.sin(time * .6 + p.ph) * .5 + .5); cx.fillStyle = `rgba(255,255,255,${a})`; cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, TAU); cx.fill(); }
+}
+let hintA = 0;
+function drawHint(){
+  const ht = time - state.hintT0, target = (!state.hintOut && !Entry.isOpen() && ht > .6 && ht < 7) ? 1 : 0;
+  hintA += (target - hintA) * .04; if (hintA < .01) return;
+  // small, sitting just above the Sound Core it describes
+  const base = state.floor - 30 + (1 - hintA) * 6;
+  cx.save(); cx.textAlign = 'center'; cx.globalAlpha = hintA;
+  cx.font = '400 11.5px Poppins, system-ui, sans-serif'; cx.fillStyle = T.faint;
+  const sub = 'The Sound Core below releases a new one every few seconds', two = cx.measureText(sub).width > W - 32;
+  if (two){ cx.fillText('The Sound Core below releases', W / 2, base - 15); cx.fillText('a new one every few seconds', W / 2, base); } else cx.fillText(sub, W / 2, base);
+  cx.font = `500 ${W < 760 ? 13 : 14}px Poppins, system-ui, sans-serif`; cx.fillStyle = T.muted;
+  cx.fillText(Party.role === 'guest' ? 'Tap a bubble to add it to the queue' : 'Tap a bubble to listen', W / 2, base - (two ? 15 : 0) - 19);
+  cx.restore();
+}
+function updateCore(){
+  coreOrb.style.setProperty('--e', (state.energy * .14 + portal.flash * .08).toFixed(3));
+  chargeC.style.strokeDashoffset = (CHARGE_LEN * (1 - (state.spawnLevel > 0 ? clamp(portal.charge, 0, 1) : 0))).toFixed(1);
+}
+function fitText(t, maxW){ if (cx.measureText(t).width <= maxW) return t; let s = t; while (s.length > 1 && cx.measureText(s + '…').width > maxW) s = s.slice(0, -1); return s.trimEnd() + '…'; }
+function drawBubble(b){
+  const s = b.scaleE * (1 + b.hover * .05); if (s <= .02) return;
+  const R = b.r, t = b.track, cov = getCover(t);
+  const wob = Math.sin(time * 1.4 + b.phase), sx = 1 + wob * .022, sy = 1 - wob * .022;
+  cx.save(); cx.globalAlpha = clamp(b.fade, 0, 1) * clamp(b.sp * 2, 0, 1);
+  cx.translate(b.drawX, b.y); cx.scale(s * sx, s * sy);
+  const gl = cx.createRadialGradient(0, 0, R * .85, 0, 0, R * 1.35);
+  gl.addColorStop(0, `rgba(255,255,255,${.05 + b.hover * .07})`); gl.addColorStop(1, 'rgba(255,255,255,0)');
+  cx.fillStyle = gl; cx.beginPath(); cx.arc(0, 0, R * 1.35, 0, TAU); cx.fill();
+  const body = cx.createRadialGradient(-R * .3, -R * .4, R * .05, 0, 0, R);
+  body.addColorStop(0, 'rgba(255,255,255,.2)'); body.addColorStop(.6, 'rgba(255,255,255,.06)'); body.addColorStop(1, 'rgba(255,255,255,.12)');
+  cx.fillStyle = body; cx.beginPath(); cx.arc(0, 0, R, 0, TAU); cx.fill();
+  const cr = R * .38, cy = -R * .2;
+  cx.fillStyle = 'rgba(255,255,255,.85)'; cx.beginPath(); cx.arc(0, cy, cr + 1.5, 0, TAU); cx.fill();
+  cx.save(); cx.beginPath(); cx.arc(0, cy, cr, 0, TAU); cx.clip();
+  const src = cov.img || cov.proc, iw = src.naturalWidth || src.width, ih = src.naturalHeight || src.height, sc = Math.max(2 * cr / iw, 2 * cr / ih);
+  cx.drawImage(src, -iw * sc / 2, cy - ih * sc / 2, iw * sc, ih * sc); cx.restore();
+  const fs = Math.max(10, R * .17);
+  if (!b.txt || b.txt.v !== fontsVersion){
+    cx.font = `600 ${fs}px Poppins, system-ui, sans-serif`; const ti = fitText(t.title, R * 1.5);
+    cx.font = `400 ${fs * .84}px Poppins, system-ui, sans-serif`; const ar = fitText(t.artist, R * 1.25);
+    b.txt = { ti, ar, v:fontsVersion };
+  }
+  cx.textAlign = 'center';
+  cx.font = `600 ${fs}px Poppins, system-ui, sans-serif`; cx.fillStyle = T.ink; cx.fillText(b.txt.ti, 0, R * .43);
+  cx.font = `400 ${fs * .84}px Poppins, system-ui, sans-serif`; cx.fillStyle = T.muted; cx.fillText(b.txt.ar, 0, R * .43 + fs * 1.15);
+  cx.strokeStyle = `rgba(255,255,255,${.2 + b.hover * .4})`; cx.lineWidth = 1; cx.beginPath(); cx.arc(0, 0, R - .6, 0, TAU); cx.stroke();
+  cx.fillStyle = 'rgba(255,255,255,.55)'; cx.beginPath(); cx.ellipse(-R * .42, -R * .62, R * .2, R * .085, -.7, 0, TAU); cx.fill();
+  if (b.replay){
+    cx.save(); cx.rotate(time * .35); cx.setLineDash([4, 6]); cx.lineWidth = 1.6; cx.strokeStyle = rgba(T.accentHi, .85);
+    cx.beginPath(); cx.arc(0, 0, R + 8, 0, TAU); cx.stroke(); cx.restore();
+    cx.font = '600 9px Poppins, system-ui, sans-serif'; if ('letterSpacing' in cx) cx.letterSpacing = '1.5px';
+    const lw = cx.measureText(b.tag).width + 16; cx.fillStyle = T.accent;
+    cx.beginPath(); if (cx.roundRect) cx.roundRect(-lw / 2, -R - 30, lw, 18, 9); else cx.rect(-lw / 2, -R - 30, lw, 18); cx.fill();
+    cx.fillStyle = '#fff'; cx.fillText(b.tag, 1, -R - 18); if ('letterSpacing' in cx) cx.letterSpacing = '0px';
+  }
+  if (b.target > 0){ const tr = R + 22 * (1 - easeOut(b.target)) + 5; cx.strokeStyle = rgba(T.accentHi, b.target * .8); cx.lineWidth = 1.5; cx.beginPath(); cx.arc(0, 0, tr, 0, TAU); cx.stroke(); }
+  cx.restore();
+}
+function update(dt){
+  const f = dt * 60, top = topLimit(), floor = state.floor, calm = reduceMotion ? .5 : 1;
+  if (state.spawnLevel > 0){ spawnTimer += dt; portal.charge = spawnTimer / spawnInterval(); if (spawnTimer >= spawnInterval()) spawn(); } else portal.charge = 0;
+  portal.flash *= Math.pow(.95, f);
+  if (state.autopop){
+    const now = performance.now();
+    if (!state.autoTarget && now >= state.autoNext){
+      const c = bubbles.filter(b => b.state === 'alive' && b.sp >= 1 && matches(b.track) && b.y < floor - 30 && b.y > top + 10);
+      if (c.length){ c.sort((a, b) => a.born - b.born); state.autoTarget = c[0]; } else if (state.spawnLevel === 0 || !bubbles.length) spawn();
+    }
+    const tb = state.autoTarget;
+    if (tb){ if (tb.state !== 'alive') state.autoTarget = null; else { tb.target = Math.min(1, tb.target + dt / 1.1); if (tb.target >= 1) popBubble(tb, true); } }
+  }
+  for (let i = bubbles.length - 1; i >= 0; i--){
+    const b = bubbles[i];
+    b.sp = Math.min(1, b.sp + dt / 1.1); b.scaleE = easeBack(b.sp);
+    if (b.state === 'flung'){
+      b.x += b.vx * f; b.y += b.vy * f; b.drawX = b.x; b.fade -= .03 * f; const m = b.r * 2;
+      if (b.fade <= 0 || b.x < -m || b.x > W + m || b.y < -m || b.y > H + m){ bubbles.splice(i, 1); if (state.hover === b) state.hover = null; }
+      continue;
+    }
+    if (b.state === 'queued'){
+      b.x += (b.qx - b.x) * .2 * f; b.y += (b.qy - b.y) * .2 * f; b.drawX = b.x; b.fade -= .04 * f; b.scaleE *= Math.max(.15, b.fade);
+      if (b.fade <= 0){ bubbles.splice(i, 1); if (state.hover === b) state.hover = null; }
+      continue;
+    }
+    b.hover += ((state.hover === b ? 1 : 0) - b.hover) * .15;
+    if (!b.held){
+      if (Qzone.on && b.state === 'alive' && b.x + b.r > Qzone.edge) b.vx -= .35 * f; // make room while you drag
+      b.vx += Math.sin(time * .4 + b.phase) * .006 * f * calm;
+      b.vy += (Math.cos(time * .33 + b.phase * 1.7) * .006 - .003) * f * calm;
+      const damp = Math.pow(.988, f); b.vx *= damp; b.vy *= damp;
+      b.x += b.vx * f * calm; b.y += b.vy * f * calm;
+    }
+    const R = b.r * b.scaleE, age = time - b.born;
+    if (b.x < (state.left || 0) + R){ b.x = (state.left || 0) + R; b.vx = Math.abs(b.vx) * .7; }
+    const rEdge = state.right || W; if (b.x > rEdge - R && !b.held){ b.x += (rEdge - R - b.x) * .15 * f; b.vx = -Math.abs(b.vx) * .7; }
+    if (b.x > W - R){ b.x = W - R; b.vx = -Math.abs(b.vx) * .7; }
+    if (b.y < top + R){ b.y = top + R; b.vy = Math.abs(b.vy) * .6 + .12; }
+    if (b.y > floor - R - 6){ if (age > 1.6) b.y = floor - R - 6; b.vy = Math.min(b.vy, -.15) - .05 * f; }
+    b.drawX = b.x + Math.sin(time * .9 + b.phase) * 2.5;
+    if (b.state === 'alive' && age > b.life && !b.held) b.state = 'fading';
+    if (b.state === 'alive' && !b.replay && !matches(b.track)) b.state = 'fading';
+    if (b.state === 'fading'){ b.fade -= .008 * f; if (b.fade <= 0){ puff(b); bubbles.splice(i, 1); if (state.hover === b) state.hover = null; continue; } }
+    if (b.state === 'clearing' && time >= b.clearAt){ puff(b); rings.push({ x:b.drawX, y:b.y, r:R * .8, max:R * 1.5, life:.7, color:T.ink, w:1.2 }); bubbles.splice(i, 1); if (state.hover === b) state.hover = null; }
+  }
+  for (let i = 0; i < bubbles.length; i++) for (let j = i + 1; j < bubbles.length; j++){
+    const a = bubbles[i], b = bubbles[j]; if (time - a.born < .5 || time - b.born < .5 || a.state === 'flung' || b.state === 'flung' || a.state === 'queued' || b.state === 'queued') continue;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = (a.r * a.scaleE + b.r * b.scaleE) * 1.04;
+    if (d > 0 && d < min){ const nx = dx / d, ny = dy / d, ov = (min - d) / 2 * .5;
+      a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
+      const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny; if (rv < 0){ const imp = rv * .7; a.vx += imp * nx; a.vy += imp * ny; b.vx -= imp * nx; b.vy -= imp * ny; } }
+  }
+  for (let i = particles.length - 1; i >= 0; i--){ const p = particles[i];
+    p.vx *= Math.pow(.965, f); p.vy = p.vy * Math.pow(.965, f) - .006 * f; p.x += p.vx * f; p.y += p.vy * f; p.rot += p.vr * f; p.life -= p.decay * f;
+    if (p.life <= 0) particles.splice(i, 1); }
+  for (let i = rings.length - 1; i >= 0; i--){ const r = rings[i]; if (r.delay > 0){ r.delay -= dt; continue; } r.r += (r.max - r.r) * .05 * f; r.life -= .014 * f; if (r.life <= 0) rings.splice(i, 1); }
+  for (const p of motes){ p.y -= p.sp * f * .3 * calm; p.x += Math.sin(time * .2 + p.ph) * .05 * f; if (p.y < -4){ p.y = H + 4; p.x = Math.random() * W; } }
+}
+function drawParticles(){
+  for (const r of rings){ if (r.delay > 0) continue; cx.strokeStyle = rgba(r.color, r.life * .7); cx.lineWidth = r.w; cx.beginPath(); cx.arc(r.x, r.y, r.r, 0, TAU); cx.stroke(); }
+  for (const p of particles){
+    const a = clamp(p.life, 0, 1) * .9;
+    if (p.type === 'dot'){ cx.fillStyle = rgba(p.color, a); cx.beginPath(); cx.arc(p.x, p.y, p.size, 0, TAU); cx.fill(); }
+    else if (p.type === 'spark'){ cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot); cx.strokeStyle = rgba(p.color, a); cx.lineWidth = 1.4; cx.lineCap = 'round'; const s = p.size * (.6 + a * .4);
+      cx.beginPath(); cx.moveTo(-s, 0); cx.lineTo(s, 0); cx.moveTo(0, -s); cx.lineTo(0, s); cx.stroke(); cx.restore(); }
+    else { cx.save(); cx.globalAlpha = a; cx.translate(p.x, p.y); cx.rotate(p.rot); cx.fillStyle = p.color; cx.beginPath(); cx.ellipse(0, 0, p.size, p.size * .45, 0, 0, TAU); cx.fill(); cx.restore(); }
+  }
+}
+
+/* spectrum */
+const spec = $('#spectrum'), sx2 = spec.getContext('2d'); let specGrad = null;
+function sizeSpectrum(){ const r = spec.getBoundingClientRect(); if (!r.width || !r.height) return; spec.width = Math.round(r.width * DPR); spec.height = Math.round(r.height * DPR); specGrad = null; }
+function analyse(){
+  const N = state.bands.length, playing = Player.track && !Player.isPaused();
+  const fft = A.analyser && (Player.mode === 'synth' || Player.mode === 'preview') && playing;
+  if (fft){
+    A.analyser.getByteFrequencyData(A.fft); const bins = A.fft.length;
+    for (let i = 0; i < N; i++){ const a = Math.floor(Math.pow(i / N, 1.8) * bins * .55) + 1, b = Math.max(a + 1, Math.floor(Math.pow((i + 1) / N, 1.8) * bins * .55) + 1);
+      let m = 0; for (let k = a; k < b && k < bins; k++) m = Math.max(m, A.fft[k]); state.bands[i] += (Math.pow(m / 255, 1.3) - state.bands[i]) * .3; }
+  } else {
+    const bpm = Player.track ? (Player.track.bpm > 140 ? Player.track.bpm / 2 : Player.track.bpm) : 100, beat = (time * bpm / 60) % 1, env = Math.pow(1 - beat, 3);
+    for (let i = 0; i < N; i++){ const n = (Math.sin(i * 12.9898 + time * 2.1) * .5 + .5) * (Math.sin(i * 4.1 + time * 3.3) * .5 + .5);
+      const target = playing ? clamp((.18 + .45 * env * (1 - i / N) + .3 * n) * (1 - i / N * .5), 0, 1) : 0; state.bands[i] += (target - state.bands[i]) * .15; }
+  }
+  let sum = 0; for (let i = 0; i < N; i++) sum += state.bands[i]; state.energy += (sum / N - state.energy) * .1;
+}
+function drawSpectrum(){
+  const w = spec.width, h = spec.height; if (!w || !h) return; sx2.clearRect(0, 0, w, h);
+  if (!specGrad){ specGrad = sx2.createLinearGradient(0, 0, w, 0); specGrad.addColorStop(0, T.accent); specGrad.addColorStop(1, T.accentHi); }
+  const N = state.bands.length, gap = 4 * DPR, bw = (w - gap * (N - 1)) / N, mid = h / 2;
+  sx2.fillStyle = specGrad;
+  for (let i = 0; i < N; i++){ const v = Math.max(.06, state.bands[i]), bh = v * h * .96, x = i * (bw + gap), r = Math.min(bw / 2, bh / 2);
+    sx2.beginPath(); if (sx2.roundRect) sx2.roundRect(x, mid - bh / 2, bw, bh, r); else sx2.rect(x, mid - bh / 2, bw, bh); sx2.fill(); }
+}
+
+/* loop */
+let last = performance.now(), frameN = 0;
+function frame(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now; time += dt; frameN++;
+  if (frameN % 10 === 0) computePortal();
+  analyse(); update(dt); drawBackground(); drawHint();
+  const order = bubbles.slice().sort((a, b) => (a.replay - b.replay) || (a.hover - b.hover));
+  for (const b of order) drawBubble(b);
+  drawParticles(); updateCore();
+  if (Player.track){ if (dock.classList.contains('open')) drawSpectrum(); UI.progress(); }
+  if (frameN % 30 === 0){ renderUpNext(); Qzone.placeHint(); }
+  if (historyDirty && frameN % 30 === 0){ historyDirty = false; store.set('bb.history', state.history); renderHistory(); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- UI ---------- */
+const ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M7 4.8v14.4a1 1 0 0 0 1.5.86l12-7.2a1 1 0 0 0 0-1.72l-12-7.2A1 1 0 0 0 7 4.8z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor"/><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor"/></svg>';
+const ICON_REPLAY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
+const ICON_EXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>';
+const ICON_LIB = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v16M10 4v16M14.5 4.6l4.6 15"/></svg>';
+let lastPaused = null;
+const UI = {
+  showTrack(t){
+    dock.classList.remove('idle');
+    if (state.nowWhy){ state.why = { id:t.id, text:state.nowWhy }; state.nowWhy = null; } else if (!state.why || state.why.id !== t.id) state.why = { id:t.id, text:whyOf(t) };
+    $('#pTitle').textContent = t.title; $('#pArtist').textContent = t.artist; $('#pWhy').textContent = state.why.text; $('#pNowLabel').textContent = 'Now playing · ' + state.why.text;
+    syncLike(); renderDevice(); updateNav();
+    $('#pCover').src = coverSrc(t); $('#pCover').alt = t.title + ' cover';
+    this.note(); lastPaused = null;
+    requestAnimationFrame(() => { sizeSpectrum(); computePortal(); });
+  },
+  note(){
+    const m = Player.mode;
+    $('#pNote').textContent = m === 'sdk' ? 'Full song, playing in this browser with your Spotify.' : m === 'embed' ? 'Playing from Spotify. Signed out, you hear a 30-second preview. Signed in to Spotify in this browser, press play inside the Spotify player for the full song.'
+      : m === 'preview' ? "Playing Spotify's 30-second preview clip."
+      : "A synth sketch in this track's genre and tempo. The open icon on each song in your library takes you to the real track on Spotify.";
+    dock.classList.toggle('src-spotify', state.source === 'spotify' && !Embed.failed && Player.mode !== 'sdk');
+  },
+  progress(){
+    const pr = Player.progress(), d = pr.dur || 30, pos = state.seekPreview != null ? state.seekPreview : pr.pos, pct = clamp(pos / d * 100, 0, 100) + '%';
+    $('#pBar').style.width = pct; $('#pMiniBar').style.width = pct; $('#pCur').textContent = fmt(pos); $('#pDur').textContent = fmt(d);
+    const paused = Player.isPaused(); if (paused !== lastPaused){ lastPaused = paused; $('#playBtn').innerHTML = paused ? ICON_PLAY : ICON_PAUSE; $('#playBtn').setAttribute('aria-label', paused ? 'Play' : 'Pause'); }
+  },
+  connState(t){ $('#connState').textContent = t; }
+};
+function updateStatus(){
+  if (Spotify.kind === 'pkce' && Spotify.token) WPS.load();
+  $('#statusText').textContent = state.mine ? `Your Spotify · ${state.pool.length} songs` : state.live ? `Spotify live · ${state.pool.length} tracks` : `Party library · ${state.pool.length} songs`;
+  UI.connState(state.live ? `Connected (${Spotify.kind === 'pkce' ? 'your Spotify account' : 'client credentials'}).` : 'Not connected. Using the party library.');
+  $('#disconnectBtn').disabled = !state.live; $('#refreshBtn').disabled = !state.live;
+  renderProfile(); if (Entry.el) Entry.renderSpot();
+}
+function toast(msg){
+  const box = $('#toasts'), t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 360); }, 3000);
+  while (box.children.length > 2) box.firstChild.remove();
+}
+function setSource(src, save){
+  state.source = src; if (save !== false) store.set('bb.src3', src);
+  document.querySelectorAll('#sourceSeg button, #sourceSeg2 button').forEach(b => b.classList.toggle('on', b.dataset.src === src));
+  if (Player.track) UI.note();
+}
+function setOpen(open, save){
+  if (open) toggleHistory(false);
+  dock.classList.toggle('open', open);
+  $('#collapseBtn').setAttribute('aria-expanded', open); $('#collapseBtn').setAttribute('aria-label', open ? 'Hide player controls' : 'Show more player controls');
+  if (save !== false) store.set('bb.open', open);
+  computePortal(); setTimeout(() => { sizeSpectrum(); computePortal(); }, 460);
+}
+const mqMobile = matchMedia('(max-width: 760px)');
+function placeTools(){ const t = $('#tools'); if (mqMobile.matches){ if (t.parentElement.id !== 'toolsSlot') $('#toolsSlot').appendChild(t); } else if (!t.parentElement.classList.contains('right')) $('.right').insertBefore(t, $('#collapseBtn')); }
+function addHistory(t){
+  state.history.unshift({ id:t.id, title:t.title, artist:t.artist, genre:t.genre, m:t.m || [], bpm:t.bpm, cover:t.cover || (coverCache.get(t.id) || {}).url || null, preview:t.preview, url:t.url, live:t.live, ts:Date.now() });
+  if (state.history.length > 100) state.history.length = 100;
+  store.set('bb.history', state.history); Party.log(t); renderHistory();
+}
+function renderHistory(){
+  const list = $('#hList'), tab = state.libTab;
+  document.querySelectorAll('#libTabs button').forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  $('#hClear').hidden = tab !== 'history';
+  $('#hSub').textContent = tab === 'history' ? 'Popped · tap to release again' : tab === 'saved' ? 'Saved · tap to release again' : 'Parties you hosted · tap for the recap';
+  if (tab === 'parties') return renderParties(list);
+  const items = tab === 'saved' ? Saved.list : state.history;
+  if (!items.length){ list.innerHTML = tab === 'saved'
+    ? `<div class="h-empty">${ICON_HEART}<b>No saved songs yet</b>Tap the heart in the player to keep a song you like.</div>`
+    : `<div class="h-empty">${ICON_LIB}<b>Nothing popped yet</b>Every bubble you pop lands here, ready to release again.</div>`; return; }
+  list.innerHTML = items.map((h, i) => { const on = Saved.has(h.id); return `
+    <div class="h-item" data-i="${i}" role="button" tabindex="0" aria-label="Release ${esc(h.title)} by ${esc(h.artist)} again">
+      <img src="${esc(coverSrc(h))}" alt="">
+      <div class="h-meta"><b>${esc(h.title)}</b><span>${esc(h.artist)}</span>
+        <em>${esc(momentLabel(h))} · ${ago(h.ts)}</em></div>
+      <div class="h-acts">
+        <button class="h-like" aria-pressed="${on}" title="${on ? 'Remove from saved' : 'Save song'}" aria-label="${on ? 'Remove' : 'Save'} ${esc(h.title)}">${ICON_HEART}</button>
+        <span class="h-replay" title="Release a replay bubble">${ICON_REPLAY}</span>
+        <a class="h-ext" href="${esc(h.url)}" target="_blank" rel="noopener" title="Open in Spotify" aria-label="Open ${esc(h.title)} in Spotify">${ICON_EXT}</a>
+      </div>
+    </div>`; }).join('');
+}
+function toggleHistory(force){
+  const h = $('#history'), open = force == null ? !h.classList.contains('open') : force;
+  if (open && dock.classList.contains('open')) setOpen(false, false);
+  h.classList.toggle('open', open); $('#libraryBtn').classList.toggle('on', open);
+}
+function buildChips(){
+  const wrap = $('#chips'), all = [{ key:'all', label:'All night' }, ...MOMENTS];
+  wrap.innerHTML = '<span class="chips-h">Moments</span>' + all.map(g => `<button class="chip${g.key === state.filter ? ' on' : ''}" data-g="${g.key}" aria-pressed="${g.key === state.filter}">${g.label}</button>`).join('');
+  wrap.addEventListener('click', e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    if (c.dataset.g !== 'all' && !state.pool.some(t => (t.m || []).includes(c.dataset.g) && !(state.noExplicit && t.ex))){
+      toast(`No ${M[c.dataset.g].label} songs in this library yet. Try searching for one.`); return; }
+    state.filter = c.dataset.g; state.recent = [];
+    wrap.querySelectorAll('.chip').forEach(x => { const on = x.dataset.g === state.filter; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); });
+    spawnTimer = spawnInterval() * .75;
+  });
+}
+function paintRange(r){ r.style.setProperty('--p', ((r.value - r.min) / (r.max - r.min) * 100) + '%'); }
+
+/* sound unlock (iPhone: keep a silent media element playing so the ring/silent switch doesn't mute web audio) */
+let keeper = null, primed = false;
+function silentWav(){
+  const sr = 8000, n = sr / 2, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8,'WAVE'); w(12,'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36,'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, i % 2 ? 1 : -1, true);
+  return new Blob([buf], { type:'audio/wav' });
+}
+function keepSessionAlive(){
+  try {
+    if (!keeper){ keeper = document.createElement('audio'); keeper.setAttribute('playsinline', ''); keeper.setAttribute('webkit-playsinline', ''); keeper.loop = true; keeper.preload = 'auto'; keeper.src = URL.createObjectURL(silentWav()); }
+    if (keeper.paused){ const p = keeper.play(); if (p && p.catch) p.catch(() => {}); }
+  } catch(e){}
+}
+function unlockAudio(){
+  keepSessionAlive(); try { WPS.player && WPS.player.activateElement && WPS.player.activateElement(); } catch(e){}
+  const c = A.init(); if (!c) return;
+  if (c.state !== 'running') c.resume().then(updateSoundBtn).catch(() => {});
+  if (!primed){ try { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); primed = true; } catch(e){} }
+  setTimeout(updateSoundBtn, 150);
+}
+function soundOn(){ return !!(A.ctx && A.ctx.state === 'running'); }
+function updateSoundBtn(){}
+function soundCheck(){
+  if (!A.ctx){ toast('Your browser has no Web Audio support.'); return; }
+  updateSoundBtn();
+  if (A.ctx.state !== 'running') toast('Sound is blocked by the browser. Tap anywhere once to turn it on.');
+  else if (A.volume === 0) toast('Volume is at 0%.');
+}
+
+function setup(){
+  const spawnR = $('#spawn'), volR = $('#vol');
+  const onSpawn = () => { state.spawnLevel = +spawnR.value; $('#spawnOut').textContent = state.spawnLevel === 0 ? 'paused' : `every ${spawnInterval().toFixed(1)}s`; paintRange(spawnR); };
+  let preMute = .8;
+  const onVol = () => { A.setVolume(volR.value / 100); WPS.volume(volR.value / 100); volR.title = 'Volume ' + volR.value + '%'; paintRange(volR);
+    const m = +volR.value === 0; $('#muteBtn').classList.toggle('muted', m); $('#muteBtn').setAttribute('aria-label', m ? 'Unmute' : 'Mute'); $('#muteBtn').title = m ? 'Unmute' : 'Mute'; };
+  $('#muteBtn').addEventListener('click', () => { if (+volR.value > 0){ preMute = volR.value / 100; volR.value = 0; } else volR.value = Math.round((preMute || .8) * 100); onVol(); });
+  spawnR.addEventListener('input', onSpawn); volR.addEventListener('input', onVol); A.volume = volR.value / 100; onSpawn(); onVol();
+  $('#autoBtn').addEventListener('click', e => { unlockAudio(); state.autopop = !state.autopop; e.currentTarget.setAttribute('aria-pressed', state.autopop);
+    state.autoNext = performance.now() + 1200; state.autoTarget = null; toast(state.autopop ? 'Auto-pop on' : 'Auto-pop off'); });
+  $('#clearBtn').addEventListener('click', clearScreen);
+  $('#coreBtn').addEventListener('click', () => { unlockAudio(); spawn();
+    if (!store.get('bb.coreTip', false)){ store.set('bb.coreTip', true); toast('The Sound Core releases a song bubble. It also does this on its own.'); } });
+  $('#playBtn').addEventListener('click', () => Player.toggle());
+  $('#prevBtn').addEventListener('click', prevTrack);
+  $('#nextBtn').addEventListener('click', nextTrack);
+  const seekBar = $('#seekBar');
+  const seekAt = e => { const r = seekBar.getBoundingClientRect(); return clamp((e.clientX - r.left) / r.width, 0, 1) * (Player.progress().dur || 30); };
+  seekBar.addEventListener('pointerdown', e => { if (!Player.track) return; seekBar.setPointerCapture(e.pointerId); seekBar.classList.add('drag'); state.seekPreview = seekAt(e); });
+  seekBar.addEventListener('pointermove', e => { if (seekBar.classList.contains('drag')) state.seekPreview = seekAt(e); });
+  const endSeek = () => { if (!seekBar.classList.contains('drag')) return; seekBar.classList.remove('drag'); if (state.seekPreview != null) Player.seek(state.seekPreview); state.seekPreview = null; };
+  seekBar.addEventListener('pointerup', endSeek); seekBar.addEventListener('pointercancel', endSeek);
+  seekBar.addEventListener('keydown', e => { if (!Player.track) return; const p = Player.progress().pos; if (e.key === 'ArrowRight'){ e.preventDefault(); Player.seek(p + 5); } else if (e.key === 'ArrowLeft'){ e.preventDefault(); Player.seek(p - 5); } });
+  $('#collapseBtn').addEventListener('click', () => setOpen(!dock.classList.contains('open')));
+  $('#pClose').addEventListener('click', () => setOpen(false));
+  setOpen(store.get('bb.open', false), false);
+  $('#playBtn').innerHTML = ICON_PLAY;
+  document.querySelectorAll('#sourceSeg button, #sourceSeg2 button').forEach(b => b.addEventListener('click', () => {
+    const src = b.dataset.src; if (src === state.source) return; setSource(src); if (Player.track) Player.play(Player.track); }));
+  setSource(state.source, false);
+  placeTools(); mqMobile.addEventListener('change', () => { placeTools(); setTimeout(computePortal, 60); });
+  $('#libraryBtn').addEventListener('click', () => toggleHistory());
+  const qIn = $('#q');
+  qIn.addEventListener('input', () => Search.run(qIn.value));
+  qIn.addEventListener('focus', () => { if (qIn.value.trim()) Search.run(qIn.value); });
+  qIn.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown'){ e.preventDefault(); Search.move(1); }
+    else if (e.key === 'ArrowUp'){ e.preventDefault(); Search.move(-1); }
+    else if (e.key === 'Enter'){ e.preventDefault(); if (Search.active > -1) Search.pick(Search.active); }
+    else if (e.key === 'Escape'){ qIn.value = ''; Search.run(''); qIn.blur(); }
+  });
+  $('#clearQ').addEventListener('click', () => { qIn.value = ''; Search.run(''); qIn.focus(); });
+  $('#results').addEventListener('mousedown', e => e.preventDefault());
+  $('#results').addEventListener('click', e => { const b = e.target.closest('.r-item'); if (b) Search.pick(+b.dataset.i); });
+  document.addEventListener('pointerdown', e => { if (!e.target.closest('#search')) Search.close(); });
+  $('#hClose').addEventListener('click', () => toggleHistory(false));
+  $('#hClear').addEventListener('click', () => { state.history = []; state.cursor = 0; store.set('bb.history', []); renderHistory(); updateNav(); toast('Library cleared'); });
+  const libAct = (e, it) => {
+    if (it.dataset.p != null) return openRecap(Party.past[+it.dataset.p], false);
+    const saved = state.libTab === 'saved', t = (saved ? Saved.list : state.history)[+it.dataset.i]; if (!t) return;
+    if (e.target.closest('.h-like')) return Saved.toggle(t);
+    replay(t, saved ? 'SAVED' : true);
+  };
+  $('#hList').addEventListener('click', e => { if (e.target.closest('.h-ext')) return; const it = e.target.closest('.h-item'); if (it) libAct(e, it); });
+  $('#hList').addEventListener('keydown', e => { if (e.key !== 'Enter' && e.key !== ' ') return; if (e.target.closest('.h-like, .h-ext')) return; const it = e.target.closest('.h-item'); if (!it) return; e.preventDefault(); libAct(e, it); });
+  $('#libTabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; state.libTab = b.dataset.tab; renderHistory(); });
+  setInterval(() => { if ($('#history').classList.contains('open')) renderHistory(); }, 30000);
+
+  const modal = $('#settings');
+  const closeS = () => closeModal(modal);
+  document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) closeModal(m); }));
+  $('#ruri').value = Spotify.redirectUri();
+  $('#copyUri').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('#ruri').value); toast('Redirect URI copied'); } catch(e){ $('#ruri').select(); toast('Select the address and copy it'); } });
+  $('#pkceBtn').addEventListener('click', () => Spotify.pkceStart($('#cid').value.trim()).catch(err => toast(err.message)));
+  $('#ccBtn').addEventListener('click', async () => { const btn = $('#ccBtn'); btn.disabled = true;
+    try { await Spotify.clientCredentials($('#cid').value.trim(), $('#csec').value.trim()); $('#csec').value = ''; if (Spotify.token){ await Spotify.loadAll(); closeS(); } }
+    catch(err){ toast(err.message || "Couldn't connect to Spotify."); updateStatus(); } btn.disabled = false; });
+  $('#refreshBtn').addEventListener('click', async () => { try { await Spotify.loadAll(); } catch(err){ toast(err.message); updateStatus(); } });
+  $('#disconnectBtn').addEventListener('click', () => Spotify.disconnect());
+
+  ['pointerup','touchend','click','keydown'].forEach(ev => document.addEventListener(ev, unlockAudio, { passive:true }));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && A.ctx && A.ctx.state !== 'running') A.ctx.resume().catch(() => {}); setTimeout(updateSoundBtn, 200); });
+  setInterval(updateSoundBtn, 1500);
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape'){ const m = document.querySelector('.modal.open'); if (m){ closeModal(m); return; } if (closePops()) return; if (Entry.isOpen()) return; if (dock.classList.contains('open')) setOpen(false); else toggleHistory(false); return; }
+    if (Entry.isOpen() || document.querySelector('.modal.open')) return;
+    if (e.key === '/' && !e.target.matches('input, textarea')){ e.preventDefault(); $('#q').focus(); return; }
+    if (e.target.matches('input, textarea')) return;
+    if (e.key === ' ' && !e.target.closest('button, a, .h-item')){ e.preventDefault(); Player.toggle(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowRight'){ e.preventDefault(); nextTrack(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowLeft'){ e.preventDefault(); prevTrack(); }
+    else if (e.key.toLowerCase() === 'l') toggleHistory();
+    else if (e.key.toLowerCase() === 'b'){ unlockAudio(); spawn(); }
+  });
+
+  const pt = e => { const r = cv.getBoundingClientRect(); return { x:e.clientX - r.left, y:e.clientY - r.top }; };
+  const hit = (x, y) => { if (y > state.floor) return null; for (let i = bubbles.length - 1; i >= 0; i--){ const b = bubbles[i]; if (b.state === 'clearing' || b.state === 'flung' || b.state === 'queued' || b.fade < .35) continue;
+    const R = b.r * b.scaleE; if (R < 6) continue; const dx = x - b.drawX, dy = y - b.y; if (dx * dx + dy * dy <= R * R * 1.08) return b; } return null; };
+  cv.addEventListener('pointermove', e => { const p = pt(e); if (drag && e.pointerType !== 'touch'){ dragMove(p.x, p.y, e.timeStamp); return; }
+    state.hover = e.pointerType === 'mouse' ? hit(p.x, p.y) : null; cv.style.cursor = state.hover ? 'pointer' : 'default'; });
+  cv.addEventListener('pointerleave', () => { state.hover = null; });
+  // A tap pops. Dragging moves a bubble, and a quick flick throws it away (skip).
+  // Touch pops on finger lift, the moment iPhone Safari treats as permission to play sound.
+  cv.addEventListener('pointerdown', e => { if (e.pointerType === 'touch') return; const p = pt(e); if (dragStart(hit(p.x, p.y), p.x, p.y, e.timeStamp)) try { cv.setPointerCapture(e.pointerId); } catch(err){} });
+  cv.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') dragEnd(e.timeStamp); });
+  cv.addEventListener('pointercancel', e => { if (e.pointerType !== 'touch') dragCancel(); });
+  const tp = t => { const r = cv.getBoundingClientRect(); return { x:t.clientX - r.left, y:t.clientY - r.top }; };
+  cv.addEventListener('touchstart', e => { const t = e.changedTouches && e.changedTouches[0]; if (!t) return; const p = tp(t); dragStart(hit(p.x, p.y), p.x, p.y, e.timeStamp); }, { passive:true });
+  cv.addEventListener('touchmove', e => { if (!drag) return; e.preventDefault(); const t = e.changedTouches[0], p = tp(t); dragMove(p.x, p.y, e.timeStamp); }, { passive:false });
+  cv.addEventListener('touchend', e => { e.preventDefault(); unlockAudio(); dragEnd(e.timeStamp); }, { passive:false });
+  cv.addEventListener('touchcancel', dragCancel);
+
+  try { new ResizeObserver(() => { document.documentElement.style.setProperty('--dock-h', $('.bar').offsetHeight + 'px'); sizeSpectrum(); computePortal(); }).observe(dock); } catch(e){}
+  window.addEventListener('resize', resize);
+}
+
+/* ---------- party, saved songs, profile ---------- */
+const SVG = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICON_USER = SVG('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>');
+const ICON_HEART = SVG('<path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/>');
+const ICON_PARTY = SVG('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>');
+const ICON_SPEAKER = SVG('<rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><path d="M12 6h.01"/>');
+const ICON_LAPTOP = SVG('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/>');
+
+function defaultPartyName(){ return new Date().toLocaleDateString('en', { weekday:'long' }) + ' party'; }
+const Party = {
+  data:store.get('bb.party', null), past:store.get('bb.parties', []),
+  get role(){ return this.data ? this.data.role : 'explore'; },
+  save(){ store.set('bb.party', this.data); },
+  newCode(){ const cs = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 4; i++) s += cs[Math.floor(Math.random() * cs.length)]; return s; },
+  joinUrl(code){ return location.href.split('#')[0].split('?')[0] + '#join=' + code; },
+  host(o){ this.data = { role:'host', name:o.name || defaultPartyName(), code:this.newCode(), started:Date.now(), allowSkip:!!o.allowSkip, noExplicit:!!o.noExplicit, songs:[] }; this.save(); applyMode(); },
+  // no server in this prototype: any code joins a demo party
+  join(code){ this.data = { role:'guest', name:"Maya's party", host:'Maya', code, started:Date.now(), allowSkip:false, noExplicit:true, songs:[] }; this.save(); applyMode(); },
+  log(t){ const d = this.data; if (!d) return; const last = d.songs[d.songs.length - 1]; if (last && last.id === t.id) return;
+    d.songs.push({ id:t.id, title:t.title, artist:t.artist, genre:t.genre, m:t.m || [], cover:t.cover || (coverCache.get(t.id) || {}).url || null, url:t.url, ts:Date.now() }); this.save(); },
+  end(){
+    const d = this.data; if (!d) return null;
+    const rec = { name:d.name, code:d.code, role:d.role, started:d.started, ended:Date.now(), songs:d.songs };
+    if (d.role === 'host'){ this.past.unshift(rec); if (this.past.length > 20) this.past.length = 20; store.set('bb.parties', this.past); }
+    this.data = null; store.del('bb.party'); state.queue = []; applyMode(); return rec;
+  }
+};
+function applyMode(){
+  const d = Party.data;
+  $('.top').classList.toggle('in-party', !!d);
+  $('#brandSub').innerHTML = d ? `<i class="live"></i>${esc(d.name)} · ${d.role === 'host' ? 'code ' + esc(d.code) : 'Guest'}` : 'Pop a bubble, find a song';
+  $('#brandBtn').title = d ? 'Party details' : 'Back to start'; $('#brandBtn').setAttribute('aria-label', $('#brandBtn').title);
+  state.noExplicit = !!(d && d.noExplicit);
+  const guest = Party.role === 'guest', ab = $('#autoBtn');
+  if (guest && state.autopop){ state.autopop = false; ab.setAttribute('aria-pressed', 'false'); }
+  ab.disabled = guest; ab.title = guest ? 'Auto-pop is for the host' : 'Auto-pop: keeps playing new songs on its own';
+  $('#deviceBtn').classList.toggle('on', guest);
+  updateNav(); renderProfile(); renderDevice();
+}
+const canSkip = () => !(Party.role === 'guest' && !Party.data.allowSkip && Player.track);
+function skipToast(){ toast(`${Party.data.host} turned off skipping. Pop a bubble to add a song to the queue.`); }
+function playNow(t, why){ state.nowWhy = why || null; Player.play(t); addHistory(t); state.cursor = 0; updateNav(); }
+function whyOf(t){
+  if (t.why) return t.why;
+  if (state.filter !== 'all' && (t.m || []).includes(state.filter)) return `${M[state.filter].label} pick`;
+  return state.live ? 'From Spotify' : 'From the party library';
+}
+
+const Saved = {
+  list:store.get('bb.saved', []), told:false,
+  has(id){ return this.list.some(x => x.id === id); },
+  async toggle(t){
+    if (!t) return;
+    const i = this.list.findIndex(x => x.id === t.id);
+    if (i > -1){ this.list.splice(i, 1); toast('Removed from your saved songs'); this.remote(t, 'DELETE'); }
+    else {
+      this.list.unshift({ id:t.id, title:t.title, artist:t.artist, genre:t.genre, m:t.m || [], bpm:t.bpm, cover:t.cover || (coverCache.get(t.id) || {}).url || null, preview:t.preview, url:t.url, ex:!!t.ex, ts:Date.now() });
+      if (Spotify.kind === 'pkce' && Spotify.token){ const ok = await this.remote(t, 'PUT'); toast(ok ? 'Saved, and added to your Liked Songs on Spotify' : 'Saved here. Spotify didn\'t accept it, so reconnect to sync.'); }
+      else { toast(this.told ? 'Saved' : 'Saved. Connect Spotify to add saves to your Liked Songs too.'); this.told = true; }
+    }
+    store.set('bb.saved', this.list); syncLike(); renderHistory(); renderProfile();
+  },
+  async remote(t, method){ if (Spotify.kind !== 'pkce' || !Spotify.token) return false; try { await Spotify.api('/me/library?uris=' + encodeURIComponent('spotify:track:' + t.id), { method }); return true; } catch(e){ return false; } }
+};
+function syncLike(){
+  const t = Player.track, on = !!t && Saved.has(t.id), b = $('#likeBtn');
+  b.setAttribute('aria-pressed', on); b.title = on ? 'Remove from saved' : 'Save song'; b.setAttribute('aria-label', b.title);
+}
+
+function profileInfo(){
+  const me = Spotify.me;
+  if (Spotify.token && Spotify.kind === 'pkce'){
+    const plan = me && me.product ? (me.product === 'premium' ? 'Spotify Premium · full songs' : 'Spotify Free · 30s previews') : 'Spotify connected';
+    return { name:(me && me.display_name) || 'Spotify listener', plan, img:me && me.images && me.images[0] && me.images[0].url, connected:true };
+  }
+  if (Spotify.token) return { name:'Spotify search', plan:'Search only · log in to use your library', connected:true, cc:true };
+  const guest = Party.role === 'guest';
+  return { name:guest ? 'Guest' : 'You', plan:state.spotLost ? 'Spotify disconnected' : guest ? `At ${Party.data.name} · no Spotify needed` : 'Not connected · party library', connected:false };
+}
+function renderProfile(){
+  const p = profileInfo(), full = p.connected && !p.cc;
+  const ini = p.name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'U';
+  const face = lg => full ? `<span class="avatar${lg ? ' lg' : ''}">${p.img ? `<img src="${esc(p.img)}" alt="">` : esc(ini)}</span>` : `<span class="avatar ghost${lg ? ' lg' : ''}">${ICON_USER}</span>`;
+  const dot = !full && (state.spotLost || !store.get('bb.pmSeen', false));
+  $('#profileBtn').innerHTML = (full ? face(false) : ICON_USER) + (dot ? '<span class="dot"></span>' : '');
+  $('#profileBtn').title = full ? p.name : 'Profile';
+  $('#pmFace').innerHTML = face(true); $('#pmName').textContent = p.name; $('#pmPlan').textContent = p.plan;
+  $('#pmConnect').hidden = full; $('#pmConnect').textContent = state.spotLost ? 'Reconnect Spotify' : p.cc ? 'Log in with your Spotify' : 'Connect Spotify';
+  $('#pmSaved').textContent = Saved.list.length || ''; $('#pmParties').textContent = Party.past.length || '';
+  $('#pmParty span').textContent = Party.data ? (Party.role === 'host' ? 'Party settings' : 'Party details') : 'Start a party';
+  $('#pmDisconnect').hidden = !Spotify.token;
+}
+function renderDevice(){
+  const d = Party.data, pop = $('#devicePop');
+  const how = Player.mode === 'embed' ? 'Spotify player' : Player.mode === 'preview' ? '30-second clip' : Player.track ? 'Synth sketch' : 'Ready';
+  pop.innerHTML = Party.role === 'guest'
+    ? `<h4>Playing on</h4><div class="dp-row">${ICON_SPEAKER}<div><b>${esc(d.host)}'s speaker</b><span>${esc(d.name)}</span></div></div>
+       <p>Your pops go to ${esc(d.host)}'s queue. In this prototype they also play here, so you can hear the flow.</p>`
+    : `<h4>Playing on</h4><div class="dp-row">${ICON_LAPTOP}<div><b>This browser</b><span>${how}${Party.role === 'host' ? " · guests' songs play here" : ''}</span></div></div>
+       <p>For a speaker, pair it with this device over Bluetooth or AirPlay and keep this tab open.</p>`;
+}
+function upNextItems(){
+  const out = state.queue.map(q => ({ t:q.t, tag:q.why === 'Requested by you' ? 'Requested' : 'Queued', req:true }));
+  bubbles.filter(b => b.state === 'alive' && matches(b.track)).sort((a, c) => a.born - c.born).forEach(b => {
+    out.push({ t:b.track, tag:b.replay ? ({ PICKED:'Picked', SAVED:'Saved' })[b.tag] || 'Replay' : momentLabel(b.track) }); });
+  return out.slice(0, W < 760 ? 3 : 4);
+}
+function renderUpNext(){
+  const items = upNextItems(), el = $('#upNext'), key = items.map(i => i.t.id + i.tag).join('|');
+  if (canSkip()) $('#nextBtn').title = items.length ? `Next: ${items[0].t.title}` : 'Next: pops the next bubble';
+  if (key === el.dataset.k) return; el.dataset.k = key;
+  el.innerHTML = items.length ? items.map(i => `<div class="un-item"><img src="${esc(coverSrc(i.t))}" alt=""><span class="h-meta"><b>${esc(i.t.title)}</b><span>${esc(i.t.artist)}</span></span><span class="un-tag${i.req ? ' req' : ''}">${esc(i.tag)}</span></div>`).join('')
+    : '<p class="un-empty">Nothing lined up. Tap the Sound Core to release a bubble.</p>';
+}
+
+/* pops + modals */
+function closePops(){ let any = false; document.querySelectorAll('.pop.open').forEach(p => { p.classList.remove('open'); any = true; }); document.querySelectorAll('[aria-haspopup]').forEach(b => b.setAttribute('aria-expanded', 'false')); return any; }
+function togglePop(id, btn){ const p = $('#' + id), open = !p.classList.contains('open'); closePops(); if (open){ p.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); } }
+function openModal(id){ closePops(); $('#' + id).classList.add('open'); }
+function closeModal(m){ m.classList.remove('open'); if (m._onClose){ const f = m._onClose; m._onClose = null; f(); } }
+function openSettings(){ openModal('settings'); $('#cid').value = Spotify.clientId || ''; }
+
+/* flick a bubble away to skip it */
+let drag = null;
+// timing comes from the input events themselves, so a busy frame can't turn a flick into a drop
+function dragStart(b, x, y, ts){ if (!b) return false; drag = { b, x0:x, y0:y, ox:b.x - x, oy:b.y - y, lx:x, ly:y, lt:ts || performance.now(), vx:0, vy:0, moved:false }; return true; }
+function dragMove(x, y, ts){
+  if (!drag) return; const now = ts || performance.now(), dt = Math.max(8, now - drag.lt);
+  drag.vx = drag.vx * .4 + (x - drag.lx) / dt * .6; drag.vy = drag.vy * .4 + (y - drag.ly) / dt * .6; drag.lx = x; drag.ly = y; drag.lt = now;
+  const b = drag.b;
+  if (!drag.moved && Math.hypot(x - drag.x0, y - drag.y0) > 10){ drag.moved = true; b.held = true; state.hover = null; if (state.autoTarget === b){ state.autoTarget = null; b.target = 0; } }
+  if (drag.moved && b.state === 'alive'){ b.x = x + drag.ox; b.y = y + drag.oy; Qzone.show(); Qzone.over(Qzone.hit(x, y)); }
+}
+function dragEnd(ts){
+  if (!drag) return; const d = drag, b = d.b; drag = null;
+  if (!d.moved){ popBubble(b); return; }
+  const inZone = Qzone.hit(d.lx, d.ly);
+  b.held = false; if (b.state !== 'alive'){ Qzone.hide(); return; }
+  if (inZone){ queueBubble(b); Qzone.hide(450); return; }
+  Qzone.hide();
+  if ((ts || performance.now()) - d.lt > 120){ d.vx = 0; d.vy = 0; } // finger rested before lifting: just drop it
+  if (Math.hypot(d.vx, d.vy) > .6){
+    b.state = 'flung'; b.vx = d.vx * 16.7; b.vy = d.vy * 16.7; state.nope.add(b.track.id);
+    toast(`Got it, ${b.track.title} won't float up again this session`);
+  } else { b.vx = clamp(d.vx * 16, -5, 5); b.vy = clamp(d.vy * 16, -5, 5); }
+}
+function dragCancel(){ if (drag){ drag.b.held = false; drag = null; } Qzone.hide(); }
+
+/* drag a bubble to the right edge to queue it */
+const Qzone = {
+  el:null, on:false, t:null,
+  show(){
+    const el = this.el || (this.el = $('#qzone')); if (this.on) return; this.on = true; clearTimeout(this.t);
+    const top = topLimit() + 60, avail = state.floor - top - 16, h = Math.min(avail, 420);
+    el.style.top = top + 'px'; el.style.height = h + 'px';
+    $('#qzoneCount').textContent = state.queue.length ? `${state.queue.length} queued` : '';
+    $('#qzoneLabel').textContent = Party.role === 'guest' ? 'Request song' : 'Add to queue';
+    el.classList.add('show'); this.edge = el.offsetLeft; $('#qhint').classList.add('active');
+  },
+  over(v){ if (this.el){ this.el.classList.toggle('over', v); $('#qzoneLabel').textContent = v ? 'Release to queue' : (Party.role === 'guest' ? 'Request song' : 'Add to queue'); } },
+  hit(x, y){ if (!this.on || !this.el) return false; const r = this.el.getBoundingClientRect(); return x >= r.left - 16 && y >= r.top - 40 && y <= r.bottom + 40; },
+  hide(delay){ if (!this.el) return; this.on = false; clearTimeout(this.t); this.t = setTimeout(() => { this.el.classList.remove('show', 'over'); $('#qhint').classList.remove('active'); }, delay || 0); },
+  // the resting icon sits at the top of the right side, stays put while dragging, and shows how many songs are queued
+  placeHint(){ const h = $('#qhint'); h.style.top = (topLimit() + 8) + 'px'; h.dataset.count = state.queue.length || ''; }
+};
+function queueBubble(b){
+  const r = $('#qzone').getBoundingClientRect();
+  b.state = 'queued'; b.qx = r.left + r.width / 2; b.qy = r.top + r.height / 2;
+  if (state.autoTarget === b) state.autoTarget = null;
+  rings.push({ x:b.qx, y:b.qy, r:18, max:72, life:.8, color:T.accent, w:1.5 });
+  unlockAudio(); A.pop(); queueTrack(b.track, b.why);
+}
+// nothing playing: start it now. Otherwise it waits its turn (guest picks go to the host's queue)
+function queueTrack(t, why){
+  if (!Player.track){ playNow(t, why || whyOf(t)); return; }
+  const guest = Party.role === 'guest';
+  state.queue.push({ t, why:guest ? 'Requested by you' : 'You queued this' }); const n = state.queue.length;
+  toast(n === 1 ? `${t.title} plays next` : `${t.title} is #${n} in the queue`);
+  renderUpNext();
+}
+
+/* QR for the join link (library from cdnjs; the code still works if it can't load) */
+let qrLib = null;
+function loadQR(){
+  if (!qrLib) qrLib = new Promise((res, rej) => {
+    if (window.QRCode) return res(window.QRCode);
+    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    s.onload = () => window.QRCode ? res(window.QRCode) : rej(); s.onerror = rej; document.head.appendChild(s); setTimeout(rej, 6000);
+  });
+  return qrLib;
+}
+function drawQR(el, text){
+  el.hidden = false; el.innerHTML = '';
+  loadQR().then(Q => { el.innerHTML = ''; try { new Q(el, { text, width:148, height:148, colorDark:'#0d0b12', colorLight:'#ffffff', correctLevel:Q.CorrectLevel.L }); } catch(e){ el.hidden = true; } })
+    .catch(() => { el.hidden = true; });
+}
+
+/* party sheet + recap */
+function renderPartySheet(){
+  const d = Party.data, body = $('#psBody'); if (!d) return;
+  $('#psTitle').innerHTML = `<i class="live"></i>${esc(d.name)}`;
+  const n = d.songs.length, since = new Date(d.started).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+  if (d.role === 'host'){
+    const url = Party.joinUrl(d.code);
+    body.innerHTML = `<p class="lead">Friends scan this or type the code to add songs. They don't need Spotify.</p>
+      <div class="qr" id="psQr"></div><div class="code-big">${esc(d.code)}</div>
+      <div class="copy-row"><input id="psLink" readonly value="${esc(url)}" aria-label="Party link"><button class="btn" data-copy="#psLink">Copy link</button></div>
+      <div class="ps-set">
+        <label class="switch"><span class="sw-text"><b>Guests can skip songs</b><span>Off means guests can only add to the queue.</span></span><input type="checkbox" data-set="allowSkip"${d.allowSkip ? ' checked' : ''}></label>
+        <label class="switch"><span class="sw-text"><b>Hide explicit songs</b><span>Uses Spotify's explicit tag. Handy for family parties.</span></span><input type="checkbox" data-set="noExplicit"${d.noExplicit ? ' checked' : ''}></label>
+      </div>
+      <div class="sheet-foot"><span class="ps-meta">${n} song${n === 1 ? '' : 's'} played · started ${since}</span><button class="btn" id="psEnd">End party</button></div>`;
+    drawQR($('#psQr'), url);
+  } else {
+    body.innerHTML = `<p class="lead">You're a guest. Pop a bubble and it joins ${esc(d.host)}'s queue.</p>
+      <div class="stats"><div class="stat"><b>${d.allowSkip ? 'On' : 'Off'}</b><span>Skipping</span></div><div class="stat"><b>${d.noExplicit ? 'Hidden' : 'Allowed'}</b><span>Explicit songs</span></div><div class="stat"><b>${state.queue.length}</b><span>Your requests</span></div></div>
+      <div class="sheet-foot"><span class="ps-meta">Code ${esc(d.code)} · joined ${since}</span><button class="btn" id="psLeave">Leave party</button></div>`;
+  }
+}
+function openPartySheet(){ renderPartySheet(); openModal('partySheet'); }
+function recapStats(p){
+  const n = p.songs.length, mins = Math.max(1, Math.round(((p.ended || Date.now()) - p.started) / 60000));
+  const dur = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+  const tally = f => { const c = {}; p.songs.forEach(s => f(s).forEach(k => { if (k) c[k] = (c[k] || 0) + 1; })); return Object.keys(c).sort((a, b) => c[b] - c[a])[0]; };
+  const topM = tally(s => s.m || []), topA = tally(s => [(s.artist || '').split(',')[0].trim()]);
+  return { n, dur, topM:topM && M[topM] ? M[topM].label : 'None yet', topA:topA || 'none yet' };
+}
+let recapParty = null;
+function openRecap(p, fromEnd){
+  if (!p) return; recapParty = p; const s = recapStats(p);
+  $('#recapTitle').textContent = fromEnd ? "That's a wrap" : p.name;
+  const date = new Date(p.started).toLocaleDateString([], { weekday:'short', day:'numeric', month:'short' });
+  $('#recapLead').textContent = s.n ? `${p.name} · ${date}. Most played artist: ${s.topA}.` : `${p.name} · ${date}. No songs played this time.`;
+  const seen = new Set(), uniq = p.songs.filter(x => !seen.has(x.id) && seen.add(x.id));
+  const k = uniq.length >= 6 ? 6 : uniq.length >= 3 ? 3 : uniq.length, mo = $('#recapMosaic');
+  mo.hidden = !k; mo.style.gridTemplateColumns = 'repeat(3,minmax(0,1fr))';
+  mo.innerHTML = uniq.slice(0, k).map(x => `<img src="${esc(coverSrc(x))}" alt="">`).join('');
+  $('#recapStats').innerHTML = `<div class="stat"><b>${s.n}</b><span>Songs played</span></div><div class="stat"><b>${s.dur}</b><span>Party length</span></div><div class="stat"><b>${esc(s.topM)}</b><span>Top moment</span></div>`;
+  $('#recapSave').disabled = !s.n; $('#recapCopy').disabled = !s.n;
+  $('#recap')._onClose = fromEnd ? () => Entry.open('home') : null;
+  openModal('recap');
+}
+async function savePlaylist(p){
+  if (Spotify.kind !== 'pkce' || !Spotify.token){ toast('Log in with Spotify to save playlists. The party stays in your library either way.'); openSettings(); return; }
+  const btn = $('#recapSave'); btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const me = Spotify.me || await Spotify.api('/me'), body = { name:p.name, public:false, description:`${p.songs.length} songs played at ${p.name}, picked with Bubble Beats.` };
+    let pl; try { pl = await Spotify.api('/me/playlists', { method:'POST', body }); } catch(e){ pl = await Spotify.api(`/users/${encodeURIComponent(me.id)}/playlists`, { method:'POST', body }); }
+    const uris = [...new Set(p.songs.map(x => 'spotify:track:' + x.id))];
+    for (let i = 0; i < uris.length; i += 100){ const chunk = { uris:uris.slice(i, i + 100) };
+      try { await Spotify.api(`/playlists/${pl.id}/items`, { method:'POST', body:chunk }); } catch(e){ await Spotify.api(`/playlists/${pl.id}/tracks`, { method:'POST', body:chunk }); } }
+    toast(`Saved “${p.name}” to your Spotify playlists`);
+  } catch(e){ toast("Couldn't save the playlist. " + (e.message || '')); }
+  btn.disabled = false; btn.textContent = 'Save as playlist';
+}
+function renderParties(list){
+  if (!Party.past.length){ list.innerHTML = `<div class="h-empty">${ICON_PARTY}<b>No parties yet</b>Parties you host show up here with every song that played.</div>`; return; }
+  list.innerHTML = Party.past.map((p, i) => { const s = recapStats(p), seen = new Set(), covers = p.songs.filter(x => !seen.has(x.id) && seen.add(x.id)).slice(0, 4);
+    return `<div class="h-item" data-p="${i}" role="button" tabindex="0" aria-label="Open the recap for ${esc(p.name)}">
+      <span class="p-thumb">${covers.map(c => `<img src="${esc(coverSrc(c))}" alt="">`).join('')}</span>
+      <div class="h-meta"><b>${esc(p.name)}</b><span>${s.n} song${s.n === 1 ? '' : 's'} · ${s.dur}</span><em>${new Date(p.started).toLocaleDateString([], { weekday:'short', day:'numeric', month:'short' })}</em></div></div>`; }).join('');
+}
+
+/* entry: how you arrive */
+const Entry = {
+  el:null, step:'home',
+  isOpen(){ return !!this.el && this.el.classList.contains('open'); },
+  open(step){ closePops(); toggleHistory(false); Search.close(); this.go(step || 'home'); this.el.classList.add('open'); this.el.setAttribute('aria-hidden', 'false'); },
+  close(){ this.el.classList.remove('open'); this.el.setAttribute('aria-hidden', 'true'); state.hintT0 = time; },
+  go(step){
+    this.step = step; this.el.querySelectorAll('.step').forEach(s => { s.hidden = s.dataset.step !== step; });
+    if (step === 'home') this.renderHome();
+    if (step === 'host') this.renderSpot();
+    if (step === 'live') this.renderLive();
+    if (step === 'join') setTimeout(() => $('#joinCode').focus(), 80);
+  },
+  resetHost(){ $('#partyName').value = defaultPartyName(); $('#hostSkip').checked = true; $('#hostExplicit').checked = false; },
+  renderHome(){
+    const d = Party.data; $('#resumeBtn').hidden = !d; $('#exploreBtn').hidden = !!d;
+    if (d) $('#resumeText').textContent = d.role === 'host' ? `${d.name} · code ${d.code}` : `${d.name} · you're a guest`;
+    $('#hostChoice b').textContent = d && d.role === 'host' ? 'Start a new party' : 'Start a party';
+  },
+  renderSpot(){
+    const p = profileInfo(); $('#hostSpot').classList.toggle('on', p.connected);
+    $('#hostSpotName').textContent = p.connected ? (p.cc ? 'Spotify search connected' : `Connected as ${p.name}`) : 'Spotify not connected';
+    $('#hostSpotSub').textContent = p.connected ? (p.cc ? 'Bubbles come from Spotify searches' : 'Bubbles come from your top tracks and liked songs') : `Optional. Without it you get the ${MOCK.length}‑song party library.`;
+    $('#hostConnect').textContent = p.connected ? 'Change' : 'Connect';
+  },
+  renderLive(){ const d = Party.data; if (!d) return; const url = Party.joinUrl(d.code); $('#liveCode').textContent = d.code; $('#liveLink').value = url; drawQR($('#liveQr'), url); }
+};
+
+function setupParty(){
+  Entry.el = $('#entry');
+  $('#entry').addEventListener('click', e => {
+    const g = e.target.closest('[data-go]'); if (!g) return; const go = g.dataset.go;
+    if (go === 'explore'){ Entry.close(); return; }
+    if (go === 'resume'){ Entry.close(); toast(`Welcome back to ${Party.data.name}`); return; }
+    if (go === 'enter'){ Entry.close(); toast(`${Party.data.name} is live. Pop bubbles to play.`); return; }
+    if (go === 'host') Entry.resetHost();
+    Entry.go(go);
+  });
+  $('#hostConnect').addEventListener('click', openSettings);
+  $('#hostStart').addEventListener('click', () => {
+    if (Party.data) Party.end();
+    Party.host({ name:$('#partyName').value.trim(), allowSkip:$('#hostSkip').checked, noExplicit:$('#hostExplicit').checked });
+    Entry.go('live');
+  });
+  const joinIn = $('#joinCode');
+  joinIn.addEventListener('input', () => { joinIn.value = joinIn.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
+  const doJoin = () => {
+    const code = joinIn.value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(code)){ toast('Party codes are 4 letters or numbers.'); joinIn.focus(); return; }
+    if (Party.data) Party.end();
+    Party.join(code); Entry.close(); joinIn.value = '';
+    toast(`You're in ${Party.data.name}. Pop a bubble to add a song to the queue.`);
+  };
+  $('#joinBtn').addEventListener('click', doJoin);
+  joinIn.addEventListener('keydown', e => { if (e.key === 'Enter') doJoin(); });
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('[data-copy]'); if (!b) return; const inp = $(b.dataset.copy);
+    try { await navigator.clipboard.writeText(inp.value); toast('Link copied'); } catch(err){ inp.select(); toast('Select the link and copy it'); }
+  });
+
+  $('#brandBtn').addEventListener('click', () => Party.data ? openPartySheet() : Entry.open('home'));
+  $('#profileBtn').addEventListener('click', e => { store.set('bb.pmSeen', true); renderProfile(); togglePop('profileMenu', e.currentTarget); });
+  $('#deviceBtn').addEventListener('click', e => { renderDevice(); togglePop('devicePop', e.currentTarget); });
+  document.addEventListener('pointerdown', e => { if (!e.target.closest('.pop, [aria-haspopup]')) closePops(); });
+  $('#profileMenu').addEventListener('click', e => {
+    if (e.target.closest('#pmConnect')){ closePops(); openSettings(); return; }
+    const it = e.target.closest('[data-pm]'); if (!it) return; closePops(); const k = it.dataset.pm;
+    if (k === 'saved' || k === 'parties'){ state.libTab = k; renderHistory(); toggleHistory(true); }
+    else if (k === 'party'){ if (Party.data) openPartySheet(); else { Entry.resetHost(); Entry.open('host'); } }
+    else if (k === 'spotify') openSettings();
+    else if (k === 'home') Entry.open('home');
+    else if (k === 'disconnect') Spotify.disconnect();
+  });
+  $('#likeBtn').addEventListener('click', () => Saved.toggle(Player.track));
+  $('#qhint').addEventListener('click', () => { setOpen(true); if (!state.queue.length) toast('Drag a bubble here to add it to the queue'); });
+
+  const ps = $('#partySheet');
+  ps.addEventListener('change', e => {
+    const c = e.target.closest('[data-set]'); if (!c || !Party.data) return;
+    Party.data[c.dataset.set] = c.checked; Party.save(); applyMode();
+    toast(c.dataset.set === 'allowSkip' ? (c.checked ? 'Guests can skip songs' : 'Guests can only add songs') : (c.checked ? 'Explicit songs hidden' : 'Explicit songs allowed'));
+  });
+  ps.addEventListener('click', e => {
+    const end = e.target.closest('#psEnd'), leave = e.target.closest('#psLeave');
+    if (end){
+      if (end.dataset.armed){ const rec = Party.end(); closeModal(ps); openRecap(rec, true); return; }
+      end.dataset.armed = '1'; end.textContent = 'Tap again to end';
+      setTimeout(() => { if (end.isConnected){ delete end.dataset.armed; end.textContent = 'End party'; } }, 3000);
+    }
+    if (leave){ const name = Party.data.name; Party.end(); closeModal(ps); toast(`You left ${name}`); Entry.open('home'); }
+  });
+  $('#recapSave').addEventListener('click', () => recapParty && savePlaylist(recapParty));
+  $('#recapCopy').addEventListener('click', async () => {
+    if (!recapParty) return; const txt = recapParty.name + '\n' + recapParty.songs.map((x, i) => `${i + 1}. ${x.title} by ${x.artist}`).join('\n');
+    try { await navigator.clipboard.writeText(txt); toast('Song list copied'); } catch(e){ toast("Couldn't reach the clipboard here"); }
+  });
+
+  const net = () => { $('#offline').hidden = navigator.onLine !== false; };
+  window.addEventListener('offline', net); window.addEventListener('online', () => { net(); toast('Back online'); }); net();
+}
+
+/* ---------- boot ---------- */
+async function bootSpotify(){
+  try { if (await Spotify.handleRedirect()){ await Spotify.loadAll(); return; }
+    if (Spotify.restore() && await Spotify.ensure()) await Spotify.loadAll(); }
+  catch(err){ if (!(Spotify.kind === 'pkce' && Spotify.token)) Spotify.token = null; }
+  updateStatus();
+}
+buildChips(); setup(); setupParty(); resize(); renderHistory(); applyMode(); updateStatus(); updateSoundBtn(); updateNav();
+Embed.load();
+{ // how you arrived decides the first screen: a shared join link, a return from Spotify login, or the start screen
+  const joinM = location.hash.match(/join=([A-Za-z0-9]{4})/), pend = store.get('bb.pendingHost', null), fromLogin = new URLSearchParams(location.search).has('code');
+  if (joinM){ Entry.open('join'); $('#joinCode').value = joinM[1].toUpperCase(); try { history.replaceState({}, '', location.href.split('#')[0]); } catch(e){} }
+  else if (pend && fromLogin){ Entry.resetHost(); $('#partyName').value = pend.name || defaultPartyName(); $('#hostSkip').checked = !!pend.allowSkip; $('#hostExplicit').checked = !!pend.noExplicit; store.del('bb.pendingHost'); Entry.open('host'); }
+  else Entry.open('home');
+}
+bootSpotify();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fontsVersion++; });
+[300, 1000, 1800, 2700, 3700].forEach(ms => setTimeout(() => spawn(), ms));
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
