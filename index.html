@@ -1253,7 +1253,6 @@ const Spotify = {
   b64url(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); },
   async pkceStart(id){
     if (!id) return toast('Paste your Client ID first.');
-    if (Embed.failed) return toast('Spotify login needs the page open in your own browser.');
     if (!this.canRedirect()) return toast('Serve this page over http(s) to log in, or use Client Credentials.');
     if (!window.crypto || !crypto.subtle) return toast('Login needs a secure page (https or localhost).');
     const verifier = this.randStr(64); store.set('bb.verifier', verifier); store.set('bb.clientId', id); this.clientId = id;
