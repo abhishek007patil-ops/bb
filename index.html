@@ -427,7 +427,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 }
 @media (prefers-reduced-motion:reduce){ .history,.panel-wrap{transition:none} .core .orb::before,.core .orb::after{animation:none;opacity:0} }
 /* ===== Mobile version: Spotify-style mini-player above a tab bar, Sound Core in the middle tab ===== */
-.top{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand conn"}
+.top{grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"brand conn clear";gap:6px}
 .hdr-connect{grid-area:conn;height:34px;padding:0 14px;border-radius:999px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;white-space:nowrap}
 .hdr-connect:active{background:var(--accent-press)}
 .np-connect{display:block;width:100%;margin:12px 0 4px;height:46px;font-size:15px}
@@ -573,6 +573,15 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 .dev-btn svg{width:21px;height:21px}
 .dev-btn.on{color:#ec6a9c}
 #deviceBtn{display:none}
+.hdr-clear{grid-area:clear;width:40px;height:40px;display:grid;place-items:center;border-radius:12px;color:var(--faint);opacity:.85;transition:color .2s,opacity .2s}
+.hdr-clear:hover,.hdr-clear:active{color:var(--ink);opacity:1}
+.hdr-clear svg{width:22px;height:22px}
+.fab{background:none;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;color:var(--faint);opacity:.75;border-radius:12px}
+.fab:hover,.fab:active{background:none;color:var(--ink);opacity:1}
+.fab svg{width:24px;height:24px}
+.top.need-connect .brand .by{display:none}
+.brand b{white-space:nowrap}
+.hdr-connect{padding:0 14px}
 /* gradient fills */
 .btn.primary,.choice.primary,.hdr-connect,.np-connect,.chip.on,.avatar,.switch input:checked{background:var(--grad);border-color:transparent}
 .btn.primary:hover,.choice.primary:hover,.hdr-connect:active,.hdr-connect:hover{background:var(--grad);border-color:transparent;filter:brightness(.92)}
@@ -588,6 +597,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 
 <header class="top">
   <button class="brand" id="brandBtn" title="Back to start" aria-label="Back to start"><span class="brand-orb"></span><div><b>Bubble Beats<span class="by">by Abi</span></b><small id="brandSub">Pop a bubble, find a song</small></div></button>
+  <button class="hdr-clear" id="hdrClear" title="Clear bubbles" aria-label="Clear bubbles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 11v5M14 11v5"/></svg></button>
   <button class="hdr-connect" id="hdrConnect" hidden>Connect Spotify</button>
 </header>
 
@@ -770,7 +780,6 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
   <button class="pm-item quiet" data-pm="disconnect" id="pmDisconnect" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Disconnect Spotify</span></button>
 </div>
 <div class="pop device-pop" id="devicePop" role="dialog" aria-label="Playing on"></div>
-<button class="qhint fab fab-clear" id="fabClear" title="Clear bubbles" aria-label="Clear bubbles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4 20 10"/><path d="m17 7-8.5 8.5"/><path d="M8.5 15.5 4 20h6l3-3"/><path d="m6 13 5 5"/></svg></button>
 <button class="qhint fab" id="qhint" title="Queue: drag a bubble here to add it" aria-label="Show the queue">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h13M3 12h13M3 18h8"/><path d="M18 15v6M15 18h6"/></svg>
 </button>
@@ -1884,7 +1893,7 @@ function updateStatus(){
   $('#disconnectBtn').disabled = !state.live; $('#refreshBtn').disabled = !state.live;
   renderProfile(); if (Entry.el) Entry.renderSpot(); syncConnect();
 }
-function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = on; a.textContent = 'Connect Spotify'; a.dataset.mode = 'cn'; } if (b) b.hidden = on; const dv = $('#npDevice'); if (dv) dv.hidden = true; syncDevice(); }
+function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = on; a.textContent = 'Connect'; a.dataset.mode = 'cn'; } const tp = document.querySelector('.top'); if (tp) tp.classList.toggle('need-connect', !on); if (b) b.hidden = on; const dv = $('#npDevice'); if (dv) dv.hidden = true; syncDevice(); }
 function toast(msg){
   const box = $('#toasts'), t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 360); }, 3000);
@@ -2578,7 +2587,7 @@ function setupPhone(){
   });
   $('#ssClose').addEventListener('click', closeSearch);
   $('#mPlay').addEventListener('click', () => Player.toggle());
-  $('#fabClear').addEventListener('click', () => clearScreen());
+  $('#hdrClear').addEventListener('click', () => clearScreen());
   ['#mDev', '#npDev'].forEach(id => $(id).addEventListener('click', e => { e.stopPropagation(); Dev.open(); }));
   const goConnect = () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message));
   $('#hdrConnect').addEventListener('click', () => $('#hdrConnect').dataset.mode === 'pl' ? PL.open() : goConnect()); $('#npConnect').addEventListener('click', goConnect); $('#npDevice').addEventListener('click', () => Dev.open()); syncConnect();
