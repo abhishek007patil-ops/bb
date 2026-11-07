@@ -570,6 +570,9 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
 #plSheet .sheet{width:100%;max-width:430px;height:100%;max-height:none;margin:0 auto;border:0;border-radius:0;box-shadow:none;background:var(--bg);display:flex;flex-direction:column;padding:calc(var(--gt) + 6px) 20px calc(env(safe-area-inset-bottom, 0px) + 16px)}
 #plSheet .pl-list{max-height:none;flex:1;min-height:0}
 #plSheet .sheet-head h2{font-size:24px}
+.dev-btn svg{width:21px;height:21px}
+.dev-btn.on{color:#ec6a9c}
+#deviceBtn{display:none}
 /* gradient fills */
 .btn.primary,.choice.primary,.hdr-connect,.np-connect,.chip.on,.avatar,.switch input:checked{background:var(--grad);border-color:transparent}
 .btn.primary:hover,.choice.primary:hover,.hdr-connect:active,.hdr-connect:hover{background:var(--grad);border-color:transparent;filter:brightness(.92)}
@@ -617,7 +620,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <div class="p-cover big-cover"><span class="orb"></span><img id="pCover" alt=""></div>
       <div class="np-title">
         <div class="p-meta"><h3 id="pTitle">Nothing playing</h3><p id="pArtist">Pop a bubble or tap the Sound Core</p><span class="p-why" id="pWhy"></span></div>
-        <button class="ctl like" id="likeBtn" aria-pressed="false" title="Save song" aria-label="Save song"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
+        <button class="ctl dev-btn" id="npDev" title="Play on" aria-label="Choose where it plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="11" height="17" rx="2"/><circle cx="8.5" cy="12.5" r="2.5"/><path d="M8.5 6h.01"/><path d="M18 7v13a2 2 0 0 1-2 2H9"/></svg></button><button class="ctl like" id="likeBtn" aria-pressed="false" title="Save song" aria-label="Save song"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
       </div>
       <div class="progress"><time id="pCur">0:00</time><div class="track-bar" id="seekBar" role="slider" aria-label="Seek" tabindex="0"><span id="pBar"></span></div><time id="pDur">0:30</time></div>
       <div class="transport">
@@ -661,6 +664,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-ra
       <button class="m-open" id="collapseBtn" aria-label="Open now playing" aria-expanded="false"></button>
       <div class="p-cover"><span class="orb"></span><img id="mCover" alt=""></div>
       <div class="m-meta"><b id="mTitle">Nothing playing</b><span id="mArtist">Pop a bubble or tap the Sound Core</span></div>
+      <button class="ctl dev-btn" id="mDev" aria-label="Choose where it plays"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="11" height="17" rx="2"/><circle cx="8.5" cy="12.5" r="2.5"/><path d="M8.5 6h.01"/><path d="M18 7v13a2 2 0 0 1-2 2H9"/></svg></button>
       <button class="ctl like" id="mLike" aria-pressed="false" aria-label="Save song"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.6 1.1 5 2.9 1.4-1.8 3-2.9 5-2.9 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg></button>
       <button class="m-play" id="mPlay" aria-label="Play"></button>
       <div class="m-prog"><span id="pMiniBar"></span></div>
@@ -1880,7 +1884,7 @@ function updateStatus(){
   $('#disconnectBtn').disabled = !state.live; $('#refreshBtn').disabled = !state.live;
   renderProfile(); if (Entry.el) Entry.renderSpot(); syncConnect();
 }
-function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = on; a.textContent = 'Connect Spotify'; a.dataset.mode = 'cn'; } if (b) b.hidden = on; const dv = $('#npDevice'); if (dv) dv.hidden = !on; syncDevice(); }
+function syncConnect(){ const on = !!(Spotify.kind === 'pkce' && Spotify.token); const a = $('#hdrConnect'), b = $('#npConnect'); if (a){ a.hidden = on; a.textContent = 'Connect Spotify'; a.dataset.mode = 'cn'; } if (b) b.hidden = on; const dv = $('#npDevice'); if (dv) dv.hidden = true; syncDevice(); }
 function toast(msg){
   const box = $('#toasts'), t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; box.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 360); }, 3000);
@@ -2435,7 +2439,7 @@ function setupParty(){
 
   $('#brandBtn').addEventListener('click', () => Party.data ? openPartySheet() : Entry.open('home'));
   $('#profileBtn').addEventListener('click', e => { store.set('bb.pmSeen', true); renderProfile(); togglePop('profileMenu', e.currentTarget); });
-  $('#deviceBtn').addEventListener('click', e => { renderDevice(); togglePop('devicePop', e.currentTarget); });
+  $('#deviceBtn').addEventListener('click', e => { e.stopPropagation(); closePops(); Dev.open(); });
   document.addEventListener('pointerdown', e => { if (!e.target.closest('.pop, [aria-haspopup]')) closePops(); });
   $('#profileMenu').addEventListener('click', e => {
     if (e.target.closest('#pmConnect')){ closePops(); Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message)); return; }
@@ -2476,7 +2480,7 @@ function setupParty(){
 }
 
 /* ---------- choose the device ---------- */
-function syncDevice(){ const t = $('#npDevText'); if (t) t.textContent = Remote.devName ? 'Playing on ' + Remote.devName : (Remote.dev ? 'Playing on your chosen device' : 'Choose where it plays'); }
+function syncDevice(){ const remote = state.source === 'app' && !!(Spotify.kind === 'pkce' && Spotify.token) && !!Remote.devName; document.querySelectorAll('.dev-btn').forEach(b => { b.classList.toggle('on', remote); b.title = remote ? 'Playing on ' + Remote.devName : 'Play on'; }); const t = $('#npDevText'); if (t) t.textContent = Remote.devName ? 'Playing on ' + Remote.devName : (Remote.dev ? 'Playing on your chosen device' : 'Choose where it plays'); }
 const IS_PHONE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 const Dev = {
   wired:false,
@@ -2575,6 +2579,7 @@ function setupPhone(){
   $('#ssClose').addEventListener('click', closeSearch);
   $('#mPlay').addEventListener('click', () => Player.toggle());
   $('#fabClear').addEventListener('click', () => clearScreen());
+  ['#mDev', '#npDev'].forEach(id => $(id).addEventListener('click', e => { e.stopPropagation(); Dev.open(); }));
   const goConnect = () => Spotify.pkceStart(Spotify.clientId).catch(err => toast(err.message));
   $('#hdrConnect').addEventListener('click', () => $('#hdrConnect').dataset.mode === 'pl' ? PL.open() : goConnect()); $('#npConnect').addEventListener('click', goConnect); $('#npDevice').addEventListener('click', () => Dev.open()); syncConnect();
   $('#mLike').addEventListener('click', () => Saved.toggle(Player.track));
